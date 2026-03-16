@@ -85,6 +85,16 @@
             <button id="importBtn" class="menu-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-1.5">
                 <i data-lucide="upload" class="w-4 h-4"></i>导入
             </button>
+            <!-- 导入下拉菜单 -->
+            <div id="importDropdown" class="dropdown-menu hidden absolute top-full left-0 mt-2 w-48 rounded-lg shadow-xl border py-2 z-50"
+                 style="background-color: var(--bg-secondary); border-color: var(--border-color);">
+                <button id="importFileBtn" class="w-full px-4 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-2">
+                    <i data-lucide="file-audio" class="w-4 h-4"></i>导入音频文件
+                </button>
+                <button id="importFolderBtn" class="w-full px-4 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-2">
+                    <i data-lucide="folder-plus" class="w-4 h-4"></i>导入文件夹
+                </button>
+            </div>
             <div class="relative">
                 <button id="settingsBtn" class="menu-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-1.5">
                     <i data-lucide="settings" class="w-4 h-4"></i>设置
@@ -306,7 +316,8 @@
                 { id: 'mechanical', name: '机械音效', count: 3 },
                 { id: 'foley', name: '拟音', count: 1 },
                 { id: 'ambient', name: '环境音', count: 0 },
-            ]}
+            ]},
+            // 动态导入的文件夹会添加到这里
         ];
 
         const categoryData = [
@@ -451,8 +462,19 @@
                     renderFolderTree();
                     lucide.createIcons();
                 } else {
+                    // 点击文件夹时筛选显示该文件夹下的文件
                     document.querySelectorAll('#folderTree .sidebar-item').forEach(item => item.classList.remove('active'));
                     div.classList.add('active');
+                    
+                    // 筛选该文件夹下的文件
+                    if (folder.path) {
+                        // 动态导入的文件夹，按 folderPath 筛选
+                        const filtered = soundData.filter(s => s.folderPath === folder.path);
+                        renderSoundList('', filtered);
+                    } else if (folder.children) {
+                        // 根文件夹内的分类
+                        filterByFolder(folder.id);
+                    }
                 }
             });
             
@@ -505,6 +527,25 @@
                 filtered = soundData.filter(s => s.category === '人声动作');
             } else if (categoryId === 'tag-foley') {
                 filtered = soundData.filter(s => s.category === '拟音');
+            }
+            
+            renderSoundList(document.getElementById('searchInput').value, filtered);
+        }
+        
+        // 按文件夹筛选
+        function filterByFolder(folderId) {
+            let filtered = soundData;
+            
+            if (folderId === 'nature') {
+                filtered = soundData.filter(s => s.category === '自然音效');
+            } else if (folderId === 'human') {
+                filtered = soundData.filter(s => s.category === '人声动作');
+            } else if (folderId === 'mechanical') {
+                filtered = soundData.filter(s => s.category === '机械音效');
+            } else if (folderId === 'foley') {
+                filtered = soundData.filter(s => s.category === '拟音');
+            } else if (folderId === 'ambient') {
+                filtered = soundData.filter(s => s.category === '环境音');
             }
             
             renderSoundList(document.getElementById('searchInput').value, filtered);
@@ -1019,55 +1060,49 @@
             }, 100);
 
             // ==================== 文件导入功能 ====================
-
-            // 导入按钮事件 - 支持文件夹扫描和后端索引
-            document.getElementById('importBtn').addEventListener('click', async () => {
+            
+            // 导入按钮 - 显示下拉菜单
+            document.getElementById('importBtn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                const dropdown = document.getElementById('importDropdown');
+                dropdown.classList.toggle('hidden');
+                dropdown.classList.toggle('visible');
+                
+                // 隐藏设置下拉菜单
+                document.getElementById('settingsDropdown').classList.add('hidden');
+                document.getElementById('settingsDropdown').classList.remove('visible');
+            });
+            
+            // 点击其他地方关闭导入菜单
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('#importDropdown') && !e.target.closest('#importBtn')) {
+                    document.getElementById('importDropdown').classList.add('hidden');
+                    document.getElementById('importDropdown').classList.remove('visible');
+                }
+            });
+            
+            // 导入单个音频文件
+            document.getElementById('importFileBtn').addEventListener('click', async () => {
+                document.getElementById('importDropdown').classList.add('hidden');
+                
                 try {
-                    // 检查 Electron API 是否可用
-                    if (window.electronAPI && window.electronAPI.fileImport && window.electronAPI.backendAPI) {
-                        // 使用 Electron 对话框选择文件夹
-                        const folderResult = await window.electronAPI.fileImport.selectFolder({
-                            title: '选择音频文件夹'
+                    if (window.electronAPI && window.electronAPI.fileImport) {
+                        const result = await window.electronAPI.fileImport.selectAudioFiles({
+                            title: '选择音频文件',
+                            filters: [
+                                { name: '音频文件', extensions: ['wav', 'mp3', 'aac', 'flac', 'ogg', 'm4a'] },
+                                { name: '所有文件', extensions: ['*'] }
+                            ]
                         });
 
-                        if (folderResult.success && folderResult.folder) {
-                            // 调用后端扫描并索引
-                            showNotification('正在扫描并索引音频文件...', 'info');
-                            const scanResult = await window.electronAPI.backendAPI.scanFolder(folderResult.folder, true);
-                            
-                            if (scanResult && !scanResult.error) {
-                                showNotification(`索引完成: 新增 ${scanResult.indexed} 个文件`, 'success');
-                                
-                                // 获取索引后的文件列表
-                                const filesResult = await window.electronAPI.backendAPI.getIndexedFiles();
-                                if (filesResult && filesResult.files) {
-                                    // 转换为前端格式
-                                    const newSounds = filesResult.files.map((file, index) => ({
-                                        id: Date.now() + index,
-                                        name: file.filename,
-                                        category: '已索引',
-                                        duration: file.duration,
-                                        tags: ['已索引'],
-                                        filePath: file.path,
-                                        size: file.size,
-                                        type: '.' + file.format,
-                                        lastModified: new Date()
-                                    }));
-                                    
-                                    soundData = newSounds;
-                                    renderSoundList();
-                                    renderFolderTree();
-                                    renderCategoryTree();
-                                    showNotification(`已加载 ${newSounds.length} 个音效文件`, 'success');
-                                }
-                            } else {
-                                showNotification('扫描失败: ' + (scanResult.error || '未知错误'), 'error');
-                            }
-                        } else if (folderResult.canceled) {
-                            console.log('用户取消了文件夹选择');
+                        if (result.success && result.files) {
+                            await handleImportedFiles(result.files);
+                        } else if (!result.canceled) {
+                            console.error('文件选择失败:', result.error);
+                            showNotification('选择文件失败', 'error');
                         }
                     } else {
-                        // 降级到浏览器原生文件选择
+                        // 浏览器环境
                         const input = document.createElement('input');
                         input.type = 'file';
                         input.accept = '.wav,.mp3,.aac,.flac,.ogg,.m4a';
@@ -1079,10 +1114,107 @@
                         input.click();
                     }
                 } catch (error) {
+                    console.error('导入文件时出错:', error);
+                    showNotification('导入失败: ' + error.message, 'error');
+                }
+            });
+            
+            // 导入文件夹
+            document.getElementById('importFolderBtn').addEventListener('click', async () => {
+                document.getElementById('importDropdown').classList.add('hidden');
+                
+                try {
+                    if (window.electronAPI && window.electronAPI.fileImport && window.electronAPI.backendAPI) {
+                        const folderResult = await window.electronAPI.fileImport.selectFolder({
+                            title: '选择音频文件夹'
+                        });
+
+                        if (folderResult.success && folderResult.folder) {
+                            const folderPath = folderResult.folder;
+                            const folderName = window.nodeAPI.path.basename(folderPath);
+                            
+                            // 调用后端扫描并索引
+                            showNotification('正在扫描并索引音频文件...', 'info');
+                            const scanResult = await window.electronAPI.backendAPI.scanFolder(folderPath, true);
+                            
+                            if (scanResult && !scanResult.error) {
+                                showNotification(`索引完成: 新增 ${scanResult.indexed} 个文件`, 'success');
+                                
+                                // 获取索引后的文件列表
+                                const filesResult = await window.electronAPI.backendAPI.getIndexedFiles();
+                                if (filesResult && filesResult.files) {
+                                    // 转换为前端格式，按文件夹分类
+                                    const newSounds = filesResult.files.map((file, index) => ({
+                                        id: Date.now() + index,
+                                        name: file.filename,
+                                        category: folderName,  // 使用文件夹名作为分类
+                                        duration: file.duration,
+                                        tags: ['已索引'],
+                                        filePath: file.path,
+                                        size: file.size,
+                                        type: '.' + file.format,
+                                        lastModified: new Date(),
+                                        folderPath: folderPath  // 保存文件夹路径
+                                    }));
+                                    
+                                    // 添加到现有数据
+                                    soundData.push(...newSounds);
+                                    
+                                    // 添加到 folderData
+                                    addFolderToTree(folderName, folderPath, newSounds.length);
+                                    
+                                    // 更新界面
+                                    renderSoundList();
+                                    renderFolderTree();
+                                    renderCategoryTree();
+                                    showNotification(`已加载 ${newSounds.length} 个音效文件`, 'success');
+                                }
+                            } else {
+                                showNotification('扫描失败: ' + (scanResult.error || '未知错误'), 'error');
+                            }
+                        } else if (!folderResult.canceled) {
+                            console.error('选择文件夹失败:', folderResult.error);
+                            showNotification('选择文件夹失败', 'error');
+                        }
+                    } else {
+                        showNotification('Electron API 不可用', 'error');
+                    }
+                } catch (error) {
                     console.error('导入文件夹时出错:', error);
                     showNotification('导入失败: ' + error.message, 'error');
                 }
             });
+            
+            // 添加文件夹到左侧树形UI
+            function addFolderToTree(folderName, folderPath, fileCount) {
+                // 查找根文件夹
+                const rootFolder = folderData.find(f => f.id === 'root');
+                if (rootFolder) {
+                    const existingChild = rootFolder.children.find(c => c.name === folderName);
+                    if (existingChild) {
+                        // 更新已有文件夹
+                        existingChild.count = fileCount;
+                        existingChild.path = folderPath;
+                    } else {
+                        // 添加到根文件夹的 children
+                        rootFolder.children.push({
+                            id: 'folder-' + Date.now(),
+                            name: folderName,
+                            path: folderPath,
+                            count: fileCount
+                        });
+                    }
+                } else {
+                    // 如果没有根文件夹，直接添加
+                    folderData.push({
+                        id: 'folder-' + Date.now(),
+                        name: folderName,
+                        path: folderPath,
+                        count: fileCount,
+                        expanded: true
+                    });
+                }
+            }
 
             // 监听文件选择事件（来自主进程）
             if (window.electronAPI) {
