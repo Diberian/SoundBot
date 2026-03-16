@@ -1,7 +1,7 @@
+# -*- coding: utf-8 -*-
 # SoundMind Backend
 
-FastAPI 后端服务，用于音效管理器的 AI 语义搜索功能。
-"""
+"""FastAPI 后端服务，用于音效管理器的 AI 语义搜索功能。"""
 
 import os
 import time
@@ -108,6 +108,7 @@ async def scan_and_index(request: schemas.ScanRequest):
         
         duration = time.time() - start_time
         
+        # 返回扫描到的文件数量
         return schemas.IndexResponse(
             indexed=result.get("added", 0) + result.get("updated", 0),
             skipped=result.get("skipped", 0),
@@ -116,6 +117,47 @@ async def scan_and_index(request: schemas.ScanRequest):
         
     except Exception as e:
         logger.error(f"扫描索引失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== 仅扫描文件（不建索引）====================
+@app.post("/api/v1/scan-only", response_model=schemas.ScanResponse)
+async def scan_only(request: schemas.ScanRequest):
+    """
+    仅扫描音频文件，不建立索引（用于没有模型的情况）
+    """
+    folder = Path(request.folder_path)
+    
+    if not folder.exists():
+        raise HTTPException(status_code=404, detail=f"文件夹不存在: {request.folder_path}")
+    
+    if not folder.is_dir():
+        raise HTTPException(status_code=400, detail=f"路径不是文件夹: {request.folder_path}")
+    
+    try:
+        from core.scanner import AudioScanner
+        scanner = AudioScanner()
+        audio_files = scanner.scan(str(folder), request.recursive)
+        
+        audio_file_list = []
+        for f in audio_files:
+            audio_file_list.append(schemas.AudioFile(
+                path=f.path,
+                filename=f.filename,
+                duration=f.duration,
+                sample_rate=f.sample_rate,
+                channels=f.channels,
+                format=f.format,
+                size=f.size
+            ))
+        
+        return schemas.ScanResponse(
+            total=len(audio_file_list),
+            files=audio_file_list
+        )
+        
+    except Exception as e:
+        logger.error(f"扫描失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -260,6 +302,52 @@ async def get_indexed_files():
         )
     except Exception as e:
         logger.error(f"获取文件列表失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== 扫描文件（不建索引）====================
+
+@app.post("/api/v1/scan-only", response_model=schemas.ScanResponse)
+async def scan_files_only(request: schemas.ScanRequest):
+    """
+    仅扫描音频文件，不建立索引（适用于没有 CLAP 模型的情况）
+    
+    - **folder_path**: 要扫描的文件夹路径
+    - **recursive**: 是否递归扫描子文件夹
+    """
+    from core.scanner import AudioScanner
+    
+    folder = Path(request.folder_path)
+    
+    if not folder.exists():
+        raise HTTPException(status_code=404, detail=f"文件夹不存在: {request.folder_path}")
+    
+    if not folder.is_dir():
+        raise HTTPException(status_code=400, detail=f"路径不是文件夹: {request.folder_path}")
+    
+    try:
+        scanner = AudioScanner()
+        audio_files = scanner.scan(str(folder), request.recursive)
+        
+        files = []
+        for f in audio_files:
+            files.append(schemas.AudioFile(
+                path=f.path,
+                filename=f.filename,
+                duration=f.duration,
+                sample_rate=f.sample_rate,
+                channels=f.channels,
+                format=f.format,
+                size=f.size
+            ))
+        
+        return schemas.ScanResponse(
+            total=len(files),
+            files=files
+        )
+        
+    except Exception as e:
+        logger.error(f"扫描失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

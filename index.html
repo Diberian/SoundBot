@@ -232,19 +232,16 @@
     </div>
     
     <!-- ==================== WAVEFORM VISUALIZATION ==================== -->
-    <div class="h-32 border-t shrink-0 relative transition-colors duration-300"
+    <div class="h-24 border-t shrink-0 relative transition-colors duration-300"
          style="border-color: var(--border-color); background-color: var(--bg-secondary);">
-        <canvas id="mainWaveform" class="w-full h-full waveform-canvas"></canvas>
-        <div class="absolute top-0 left-0 right-0 h-6 flex items-end text-xs opacity-50 px-4 pointer-events-none" style="color: var(--text-secondary);">
-            <span class="absolute left-4">00:00</span>
-            <span class="absolute" style="left: 25%">00:05</span>
-            <span class="absolute" style="left: 50%">00:10</span>
-            <span class="absolute" style="left: 75%">00:15</span>
-            <span class="absolute right-4" id="totalTimeDisplay">00:20</span>
+        
+        <!-- 空状态提示 -->
+        <div id="waveformEmptyState" class="absolute inset-0 flex items-center justify-center">
+            <span class="text-sm opacity-40" style="color: var(--text-secondary);">请导入音频文件</span>
         </div>
-        <div id="playhead" class="absolute top-6 bottom-0 w-px pointer-events-none transition-all" style="left: 0%; background-color: var(--text-primary);">
-            <div class="absolute -top-1 -left-1.5 w-3 h-3 rounded-full" style="background-color: var(--text-primary);"></div>
-        </div>
+        
+        <!-- 波形画布 -->
+        <canvas id="mainWaveform" class="w-full h-full waveform-canvas hidden"></canvas>
     </div>
     
     <!-- ==================== BOTTOM CONTROLS ==================== -->
@@ -298,40 +295,41 @@
     <!-- ==================== JAVASCRIPT ==================== -->
     <script>
         // ==================== DATA ====================
-        const soundData = [
-            { id: 1, name: 'rain_light_01.wav', category: '自然音效', duration: 15230, tags: ['雨声', '自然', '轻柔'] },
-            { id: 2, name: 'thunder_deep_02.wav', category: '自然音效', duration: 8450, tags: ['雷声', '自然', '深沉'] },
-            { id: 3, name: 'footsteps_wood_03.wav', category: '人声动作', duration: 12100, tags: ['脚步声', '木质', '动作'] },
-            { id: 4, name: 'doorbell_classic.wav', category: '机械音效', duration: 3500, tags: ['门铃', '经典', '机械'] },
-            { id: 5, name: 'car_engine_idle.wav', category: '机械音效', duration: 20000, tags: ['汽车', '引擎', '机械'] },
-            { id: 6, name: 'birds_morning_chorus.wav', category: '自然音效', duration: 18750, tags: ['鸟叫', '自然', '清晨'] },
-            { id: 7, name: 'keyboard_typing_fast.wav', category: '人声动作', duration: 10200, tags: ['键盘', '打字', '快速'] },
-            { id: 8, name: 'phone_ring_old.wav', category: '机械音效', duration: 5800, tags: ['电话', '铃声', '复古'] },
-            { id: 9, name: 'wind_howling_storm.wav', category: '自然音效', duration: 25400, tags: ['风声', '风暴', '自然'] },
-            { id: 10, name: 'explosion_distant_01.wav', category: '拟音', duration: 6300, tags: ['爆炸', '远处', '特效'] },
+        // 初始为空，用户导入音频后会自动添加
+        let soundData = [];
+        
+        let folderData = [
+            { id: 'root', name: '音效库', expanded: true, children: [] }
         ];
 
-        const folderData = [
-            { id: 'root', name: '音效库', expanded: true, children: [
-                { id: 'nature', name: '自然音效', count: 5 },
-                { id: 'human', name: '人声动作', count: 2 },
-                { id: 'mechanical', name: '机械音效', count: 3 },
-                { id: 'foley', name: '拟音', count: 1 },
-                { id: 'ambient', name: '环境音', count: 0 },
-            ]},
-            // 动态导入的文件夹会添加到这里
+        // 分类数据（动态生成）
+        let categoryData = [
+            { id: 'tag-all', name: '全部', count: 0 }
         ];
-
-        const categoryData = [
-            { id: 'tag-all', name: '全部', count: 10 },
-            { id: 'tag-nature', name: '自然', count: 5 },
-            { id: 'tag-mechanical', name: '机械', count: 3 },
-            { id: 'tag-human', name: '人声', count: 2 },
-            { id: 'tag-foley', name: '拟音', count: 1 },
-            { id: 'tag-short', name: '短音效 (<5s)', count: 2 },
-            { id: 'tag-medium', name: '中音效 (5-15s)', count: 5 },
-            { id: 'tag-long', name: '长音效 (>15s)', count: 3 },
-        ];
+        
+        function updateCategoryData() {
+            const allCount = soundData.length;
+            const categories = {};
+            
+            soundData.forEach(sound => {
+                const cat = sound.category || '其他';
+                categories[cat] = (categories[cat] || 0) + 1;
+            });
+            
+            categoryData = [
+                { id: 'tag-all', name: '全部', count: allCount }
+            ];
+            
+            Object.keys(categories).forEach(cat => {
+                categoryData.push({ 
+                    id: 'tag-' + cat, 
+                    name: cat, 
+                    count: categories[cat] 
+                });
+            });
+            
+            renderCategoryTree();
+        }
 
         // ==================== STATE ====================
         let currentSound = null;
@@ -413,6 +411,7 @@
                 if (audioPlayer && currentSound) {
                     playbackProgress = audioPlayer.currentTime * 1000;
                     updatePlaybackUI();
+                    drawMainWaveform();
                 }
             });
             audioPlayer.addEventListener('loadedmetadata', () => {
@@ -430,57 +429,107 @@
         }
         
         async function loadAndPlaySound(sound) {
-            if (!audioPlayer) initAudioPlayer();
+            console.log('[loadAndPlaySound] 开始播放:', sound);
             
             try {
-                let audioSrc = sound.filePath;
-                
-                // 尝试使用后端 API 获取音频 URL（需要后端服务运行）
-                // 如果失败则使用原始文件路径
-                if (sound.filePath && window.electronAPI && window.electronAPI.backendAPI && !sound.filePath.startsWith('http')) {
-                    try {
-                        audioSrc = await window.electronAPI.backendAPI.getAudioUrl(sound.filePath);
-                    } catch (urlError) {
-                        console.warn('获取音频 URL 失败，使用原始路径:', urlError.message);
-                    }
+                if (!sound.filePath) {
+                    console.error('[loadAndPlaySound] 缺少文件路径');
+                    showNotification('无法播放：缺少文件路径', 'error');
+                    return;
                 }
                 
-                // 如果没有获取到有效的音频 URL，使用 file:// 协议
-                if (!audioSrc || audioSrc === sound.filePath) {
-                    if (sound.filePath && !sound.filePath.startsWith('file://') && !sound.filePath.startsWith('http')) {
-                        // 对路径进行编码处理
-                        audioSrc = 'file://' + encodeURIComponent(sound.filePath).replace(/%2F/g, '/');
+                // 确保 audioPlayer 存在
+                if (!audioPlayer) {
+                    console.log('[loadAndPlaySound] 初始化 audioPlayer');
+                    initAudioPlayer();
+                }
+                
+                let audioSrc;
+                
+                // 优先使用主进程 IPC 读取本地音频文件
+                if (window.electronAPI && window.electronAPI.readAudioFile) {
+                    console.log('[Frontend] Calling readAudioFile:', sound.filePath);
+                    const result = await window.electronAPI.readAudioFile(sound.filePath);
+                    console.log('[Frontend] readAudioFile result:', result);
+                    
+                    if (result && result.success) {
+                        const uint8Array = new Uint8Array(result.data);
+                        // 根据文件类型设置正确的 MIME 类型
+                        const fileExt = sound.filePath.split('.').pop().toLowerCase();
+                        const mimeTypes = {
+                            'wav': 'audio/wav',
+                            'mp3': 'audio/mpeg',
+                            'flac': 'audio/flac',
+                            'aiff': 'audio/aiff',
+                            'aif': 'audio/aiff',
+                            'ogg': 'audio/ogg',
+                            'm4a': 'audio/mp4',
+                            'aac': 'audio/aac'
+                        };
+                        const mimeType = mimeTypes[fileExt] || 'audio/wav';
+                        const blob = new Blob([uint8Array], { type: mimeType });
+                        audioSrc = URL.createObjectURL(blob);
+                        console.log('[Frontend] 播放音频（通过 IPC）:', sound.filePath, 'MIME:', mimeType);
+                    } else {
+                        console.warn('[Frontend] readAudioFile 失败，使用后备方案');
+                        // 后备：使用 file:// 协议
+                        audioSrc = 'file://' + encodeURI(sound.filePath).replace(/#/g, '%23');
+                    }
+                } else {
+                    // 后备：使用 file:// 协议
+                    if (!sound.filePath.startsWith('file://') && !sound.filePath.startsWith('http')) {
+                        audioSrc = 'file://' + encodeURI(sound.filePath).replace(/#/g, '%23');
                     } else {
                         audioSrc = sound.filePath;
                     }
+                    console.log('[Frontend] 播放音频（后备）:', audioSrc);
                 }
                 
-                console.log('播放音频:', audioSrc);
+                // 设置音频源
                 audioPlayer.src = audioSrc;
                 audioPlayer.volume = currentVolume / 100;
                 audioPlayer.muted = isMuted;
                 audioPlayer.loop = isLooping;
                 
-                await audioPlayer.play();
-                isPlaying = true;
+                console.log('[loadAndPlaySound] 开始播放...');
+                
+                // 尝试播放
+                try {
+                    await audioPlayer.play();
+                    isPlaying = true;
+                    console.log('[loadAndPlaySound] 播放成功');
+                } catch (playError) {
+                    console.error('[loadAndPlaySound] 播放失败:', playError);
+                    // 如果播放失败，尝试使用 file:// 协议
+                    if (!audioSrc.startsWith('file://') && !audioSrc.startsWith('blob:')) {
+                        audioSrc = 'file://' + encodeURI(sound.filePath).replace(/#/g, '%23');
+                        audioPlayer.src = audioSrc;
+                        try {
+                            await audioPlayer.play();
+                            isPlaying = true;
+                            console.log('[loadAndPlaySound] 后备方案播放成功');
+                        } catch (e2) {
+                            console.error('[loadAndPlaySound] 后备方案也失败:', e2);
+                            showNotification('播放失败: ' + e2.message, 'error');
+                        }
+                    } else {
+                        showNotification('播放失败: ' + playError.message, 'error');
+                    }
+                }
+                
                 updatePlaybackUI();
                 renderSoundList(document.getElementById('searchInput').value);
                 
-                // 获取波形数据
-                fetchWaveformData(audioSrc).then(waveform => {
-                    if (waveform) {
-                        sound.waveform = waveform;
-                        drawMainWaveform();
-                    }
-                });
             } catch (error) {
-                console.error('播放失败:', error);
-                // 使用 alert 作为后备通知方式
+                console.error('[loadAndPlaySound] 总体错误:', error);
                 if (typeof showNotification === 'function') {
                     showNotification('播放失败: ' + error.message, 'error');
                 } else {
                     alert('播放失败: ' + error.message);
                 }
+                // 确保即使出错也更新 UI
+                isPlaying = false;
+                updatePlaybackUI();
             }
         }
 
@@ -499,7 +548,7 @@
             const seconds = totalSeconds % 60;
             return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
         }
-
+        
         // ==================== FOLDER TREE ====================
         function renderFolderTree() {
             const container = document.getElementById('folderTree');
@@ -593,20 +642,12 @@
         function filterByCategory(categoryId) {
             let filtered = soundData;
             
-            if (categoryId === 'tag-short') {
-                filtered = soundData.filter(s => s.duration < 5000);
-            } else if (categoryId === 'tag-medium') {
-                filtered = soundData.filter(s => s.duration >= 5000 && s.duration <= 15000);
-            } else if (categoryId === 'tag-long') {
-                filtered = soundData.filter(s => s.duration > 15000);
-            } else if (categoryId === 'tag-nature') {
-                filtered = soundData.filter(s => s.category === '自然音效');
-            } else if (categoryId === 'tag-mechanical') {
-                filtered = soundData.filter(s => s.category === '机械音效');
-            } else if (categoryId === 'tag-human') {
-                filtered = soundData.filter(s => s.category === '人声动作');
-            } else if (categoryId === 'tag-foley') {
-                filtered = soundData.filter(s => s.category === '拟音');
+            if (categoryId === 'tag-all') {
+                filtered = soundData;
+            } else if (categoryId.startsWith('tag-')) {
+                // 动态分类 - 根据分类名称过滤
+                const categoryName = categoryId.replace('tag-', '');
+                filtered = soundData.filter(s => s.category === categoryName);
             }
             
             renderSoundList(document.getElementById('searchInput').value, filtered);
@@ -638,8 +679,17 @@
             
             const filteredSounds = sounds.filter(sound => 
                 sound.name.toLowerCase().includes(filter.toLowerCase()) ||
-                sound.tags.some(tag => tag.toLowerCase().includes(filter.toLowerCase()))
+                (sound.tags && sound.tags.some(tag => tag.toLowerCase().includes(filter.toLowerCase())))
             );
+            
+            // 空状态提示
+            if (filteredSounds.length === 0) {
+                const emptyDiv = document.createElement('div');
+                emptyDiv.className = 'flex items-center justify-center h-full';
+                emptyDiv.innerHTML = `<span class="text-sm opacity-40" style="color: var(--text-secondary);">请导入音频文件</span>`;
+                container.appendChild(emptyDiv);
+                return;
+            }
             
             filteredSounds.forEach(sound => {
                 const row = document.createElement('div');
@@ -726,25 +776,61 @@
         function drawMiniWaveforms() {
             document.querySelectorAll('.mini-waveform').forEach(canvas => {
                 const ctx = canvas.getContext('2d');
-                const width = canvas.width = canvas.offsetWidth;
-                const height = canvas.height = canvas.offsetHeight;
+                
+                // 强制设置正确的尺寸
+                const width = canvas.width = canvas.offsetWidth || 112;
+                const height = canvas.height = canvas.offsetHeight || 32;
+                
+                // 填充透明背景
+                ctx.clearRect(0, 0, width, height);
+                
                 const soundId = parseInt(canvas.dataset.id);
                 const sound = soundData.find(s => s.id === soundId);
                 
-                ctx.clearRect(0, 0, width, height);
+                const isCurrent = currentSound && currentSound.id === soundId;
                 
-                const bars = 30;
-                const barWidth = width / bars;
+                // 获取正确的颜色值
+                const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-primary').trim() || '#e5e5e5';
+                const secondaryColor = getComputedStyle(document.documentElement).getPropertyValue('--text-secondary').trim() || '#a3a3a3';
                 
-                for (let i = 0; i < bars; i++) {
-                    const barHeight = Math.random() * height * 0.8 + height * 0.1;
-                    const x = i * barWidth;
-                    const y = (height - barHeight) / 2;
-                    
-                    ctx.fillStyle = currentSound && currentSound.id === soundId ? 'var(--text-primary)' : 'var(--text-secondary)';
-                    ctx.globalAlpha = currentSound && currentSound.id === soundId ? 1 : 0.5;
-                    ctx.fillRect(x + 1, y, barWidth - 2, barHeight);
+                // 绘制细腻线条波形
+                const centerY = height / 2;
+                const maxAmplitude = height * 0.8;
+                
+                const samples = 50;
+                const step = width / samples;
+                
+                ctx.globalAlpha = isCurrent ? 1 : 0.5;
+                ctx.fillStyle = isCurrent ? textColor : secondaryColor;
+                ctx.strokeStyle = isCurrent ? textColor : secondaryColor;
+                ctx.lineWidth = 1;
+                
+                // 上半部分
+                ctx.beginPath();
+                ctx.moveTo(0, centerY);
+                for (let i = 0; i <= samples; i++) {
+                    const seed = Math.sin(i * 0.15) * 0.5 + Math.sin(i * 0.08) * 0.3 + Math.sin(i * 0.22) * 0.2;
+                    const amplitude = Math.abs(seed) * 0.8 + 0.2;
+                    const y = centerY - amplitude * maxAmplitude * 0.5;
+                    ctx.lineTo(i * step, y);
                 }
+                ctx.lineTo(width, centerY);
+                ctx.closePath();
+                ctx.fill();
+                
+                // 下半部分
+                ctx.beginPath();
+                ctx.moveTo(0, centerY);
+                for (let i = 0; i <= samples; i++) {
+                    const seed = Math.sin(i * 0.15) * 0.5 + Math.sin(i * 0.08) * 0.3 + Math.sin(i * 0.22) * 0.2;
+                    const amplitude = Math.abs(seed) * 0.8 + 0.2;
+                    const y = centerY + amplitude * maxAmplitude * 0.5;
+                    ctx.lineTo(i * step, y);
+                }
+                ctx.lineTo(width, centerY);
+                ctx.closePath();
+                ctx.fill();
+                
                 ctx.globalAlpha = 1;
             });
         }
@@ -811,8 +897,8 @@
             const currentTimeEl = document.getElementById('currentTime');
             const durationTimeEl = document.getElementById('durationTime');
             const progressBar = document.getElementById('progressBar');
-            const playhead = document.getElementById('playhead');
-            const totalTimeDisplay = document.getElementById('totalTimeDisplay');
+            
+            if (!playIcon || !pauseIcon || !currentTimeEl || !durationTimeEl || !progressBar) return;
             
             if (isPlaying) {
                 playIcon.classList.add('hidden');
@@ -825,16 +911,13 @@
             if (currentSound) {
                 currentTimeEl.textContent = formatTimeShort(playbackProgress);
                 durationTimeEl.textContent = formatTimeShort(currentSound.duration);
-                totalTimeDisplay.textContent = formatTimeShort(currentSound.duration);
                 
                 const progress = (playbackProgress / currentSound.duration) * 100;
                 progressBar.style.width = `${progress}%`;
-                playhead.style.left = `${progress}%`;
             } else {
                 currentTimeEl.textContent = '00:00';
                 durationTimeEl.textContent = '00:00';
                 progressBar.style.width = '0%';
-                playhead.style.left = '0%';
             }
         }
 
@@ -858,7 +941,7 @@
                 
                 // 获取音频数据
                 const rawData = audioBuffer.getChannelData(0);
-                const samples = 100; // 采样点数
+                const samples = 200; // 采样点数
                 const blockSize = Math.floor(rawData.length / samples);
                 const waveform = [];
                 
@@ -882,40 +965,168 @@
         // ==================== MAIN WAVEFORM ====================
         function drawMainWaveform() {
             const canvas = document.getElementById('mainWaveform');
-            const ctx = canvas.getContext('2d');
-            const width = canvas.width = canvas.offsetWidth;
-            const height = canvas.height = canvas.offsetHeight;
+            const emptyState = document.getElementById('waveformEmptyState');
             
-            ctx.clearRect(0, 0, width, height);
+            // 没有音频时显示提示
+            if (!currentSound) {
+                if (canvas) canvas.classList.add('hidden');
+                if (emptyState) emptyState.classList.remove('hidden');
+                return;
+            }
             
-            if (!currentSound) return;
+            // 有音频时显示波形
+            if (canvas) {
+                canvas.classList.remove('hidden');
+                const ctx = canvas.getContext('2d');
+                
+                const container = canvas.parentElement;
+                const width = canvas.width = container.offsetWidth || 1200;
+                const height = canvas.height = container.offsetHeight || 96;
+                
+                // 填充背景色
+                const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg-secondary').trim() || '#141414';
+                ctx.fillStyle = bgColor;
+                ctx.fillRect(0, 0, width, height);
+                
+                // 获取颜色
+                const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-primary').trim() || '#e5e5e5';
+                const secondaryColor = getComputedStyle(document.documentElement).getPropertyValue('--text-secondary').trim() || '#a3a3a3';
+                
+                const progress = playbackProgress / currentSound.duration;
+                const waveformData = currentSound.waveform || null;
+                
+                // 绘制细腻波形
+                drawBarWaveform(ctx, width, height, waveformData, textColor, secondaryColor, progress);
+            }
             
-            const bars = 100;
-            const barWidth = width / bars;
-            const progress = currentSound ? (playbackProgress / currentSound.duration) : 0;
-            const progressBarIndex = Math.floor(bars * progress);
+            if (emptyState) emptyState.classList.add('hidden');
+        }
+
+        // 绘制装饰性波形（空状态）
+        // 绘制细腻线条波形（类似专业音频编辑器）
+        function drawBarWaveform(ctx, width, height, waveformData, activeColor, inactiveColor, progress) {
+            const centerY = height / 2;
+            const maxAmplitude = height * 0.85;
             
-            const waveformData = currentSound.waveform || null;
+            // 采样点数 - 更多采样点实现更细腻效果
+            const samples = Math.min(400, Math.floor(width / 2));
+            const step = width / samples;
             
-            for (let i = 0; i < bars; i++) {
-                let barHeight;
+            // 未播放部分
+            ctx.globalAlpha = 0.25;
+            ctx.strokeStyle = inactiveColor;
+            ctx.lineWidth = 1;
+            ctx.fillStyle = inactiveColor;
+            
+            // 绘制上半部分
+            ctx.beginPath();
+            ctx.moveTo(0, centerY);
+            for (let i = 0; i <= samples; i++) {
+                let amplitude;
                 if (waveformData && waveformData[i] !== undefined) {
-                    barHeight = waveformData[i] * (height - 40) * 0.9 + (height - 40) * 0.05;
+                    amplitude = waveformData[i];
                 } else {
-                    barHeight = Math.random() * (height - 40) * 0.8 + (height - 40) * 0.1;
+                    // 伪随机 fallback
+                    amplitude = 0.1 + Math.abs(Math.sin(i * 0.1) * Math.sin(i * 0.05)) * 0.3;
                 }
-                const x = i * barWidth;
-                const y = (height - barHeight) / 2;
-                
-                if (i <= progressBarIndex) {
-                    ctx.fillStyle = 'var(--text-primary)';
+                const y = centerY - amplitude * maxAmplitude * 0.5;
+                ctx.lineTo(i * step, y);
+            }
+            ctx.lineTo(width, centerY);
+            ctx.closePath();
+            ctx.fill();
+            
+            // 绘制下半部分
+            ctx.beginPath();
+            ctx.moveTo(0, centerY);
+            for (let i = 0; i <= samples; i++) {
+                let amplitude;
+                if (waveformData && waveformData[i] !== undefined) {
+                    amplitude = waveformData[i];
                 } else {
-                    ctx.fillStyle = 'var(--text-secondary)';
-                    ctx.globalAlpha = 0.3;
+                    amplitude = 0.1 + Math.abs(Math.sin(i * 0.1) * Math.sin(i * 0.05)) * 0.3;
                 }
-                
-                ctx.fillRect(x + 1, y, barWidth - 2, barHeight);
+                const y = centerY + amplitude * maxAmplitude * 0.5;
+                ctx.lineTo(i * step, y);
+            }
+            ctx.lineTo(width, centerY);
+            ctx.closePath();
+            ctx.fill();
+            
+            // 播放进度部分 - 使用更亮的颜色和中心线
+            const progressX = progress * width;
+            
+            // 中心线
+            ctx.globalAlpha = 0.4;
+            ctx.beginPath();
+            ctx.moveTo(0, centerY);
+            ctx.lineTo(progressX, centerY);
+            ctx.stroke();
+            
+            // 绘制已播放部分的波形
+            ctx.globalAlpha = 0.9;
+            ctx.strokeStyle = activeColor;
+            ctx.lineWidth = 1.2;
+            ctx.fillStyle = activeColor;
+            
+            // 上半部分（已播放）
+            ctx.beginPath();
+            ctx.moveTo(0, centerY);
+            for (let i = 0; i <= Math.floor(progress * samples); i++) {
+                let amplitude;
+                if (waveformData && waveformData[i] !== undefined) {
+                    amplitude = waveformData[i];
+                } else {
+                    amplitude = 0.1 + Math.abs(Math.sin(i * 0.1) * Math.sin(i * 0.05)) * 0.3;
+                }
+                const y = centerY - amplitude * maxAmplitude * 0.5;
+                ctx.lineTo(i * step, y);
+            }
+            ctx.lineTo(progressX, centerY);
+            ctx.closePath();
+            ctx.fill();
+            
+            // 下半部分（已播放）
+            ctx.beginPath();
+            ctx.moveTo(0, centerY);
+            for (let i = 0; i <= Math.floor(progress * samples); i++) {
+                let amplitude;
+                if (waveformData && waveformData[i] !== undefined) {
+                    amplitude = waveformData[i];
+                } else {
+                    amplitude = 0.1 + Math.abs(Math.sin(i * 0.1) * Math.sin(i * 0.05)) * 0.3;
+                }
+                const y = centerY + amplitude * maxAmplitude * 0.5;
+                ctx.lineTo(i * step, y);
+            }
+            ctx.lineTo(progressX, centerY);
+            ctx.closePath();
+            ctx.fill();
+            
+            // 播放头位置
+            if (progress > 0) {
+                // 发光效果
                 ctx.globalAlpha = 1;
+                ctx.shadowColor = activeColor;
+                ctx.shadowBlur = 6;
+                ctx.strokeStyle = activeColor;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(progressX, 0);
+                ctx.lineTo(progressX, height);
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+                
+                // 播放头中心点
+                ctx.fillStyle = activeColor;
+                ctx.beginPath();
+                ctx.arc(progressX, centerY, 4, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(progressX, centerY, 1.5, 0, Math.PI * 2);
+                ctx.fill();
             }
         }
 
@@ -1004,7 +1215,7 @@
             // Initialize
             initAudioPlayer();
             renderFolderTree();
-            renderCategoryTree();
+            updateCategoryData();
             renderSoundList();
             drawMainWaveform();
             lucide.createIcons();
@@ -1209,9 +1420,13 @@
                 });
             });
             
-            // Waveform click
+            // Waveform click - 没有音频时触发导入
             document.getElementById('mainWaveform').addEventListener('click', (e) => {
-                if (!currentSound) return;
+                if (!currentSound) {
+                    // 触发导入下拉菜单
+                    document.getElementById('importBtn').click();
+                    return;
+                }
                 const rect = e.target.getBoundingClientRect();
                 const progress = (e.clientX - rect.left) / rect.width;
                 playbackProgress = Math.floor(progress * currentSound.duration);
@@ -1219,10 +1434,14 @@
                 drawMainWaveform();
             });
             
-            // Animation loop for waveform
+            // Animation loop for waveform - with safety check
             setInterval(() => {
-                if (isPlaying && currentSound) {
-                    drawMainWaveform();
+                try {
+                    if (isPlaying && currentSound) {
+                        drawMainWaveform();
+                    }
+                } catch (e) {
+                    console.warn('波形绘制错误:', e);
                 }
             }, 100);
 
@@ -1294,30 +1513,84 @@
 
                         if (folderResult.success && folderResult.folder) {
                             const folderPath = folderResult.folder;
-                            const folderName = window.nodeAPI.path.basename(folderPath);
+                            // 使用 JS 原生方式获取文件夹名
+                            const folderName = folderPath.split(/[/\\]/).pop();
                             
                             // 调用后端扫描并索引
                             showNotification('正在扫描并索引音频文件...', 'info');
-                            const scanResult = await window.electronAPI.backendAPI.scanFolder(folderPath, true);
+                            
+                            let scanResult;
+                            try {
+                                scanResult = await window.electronAPI.backendAPI.scanFolder(folderPath, true);
+                            } catch (e) {
+                                console.log('scanFolder 失败，尝试 scan-only:', e);
+                                // 如果 scan 失败，尝试调用 scan-only（不需要模型）
+                                scanResult = await window.electronAPI.backendAPI.scanOnly(folderPath, true);
+                            }
                             
                             if (scanResult && !scanResult.error) {
-                                showNotification(`索引完成: 新增 ${scanResult.indexed} 个文件`, 'success');
+                                showNotification(`索引完成: 新增 ${scanResult.indexed || scanResult.total || 0} 个文件`, 'success');
                                 
-                                // 获取索引后的文件列表
-                                const filesResult = await window.electronAPI.backendAPI.getIndexedFiles();
-                                if (filesResult && filesResult.files) {
-                                    // 转换为前端格式，按文件夹分类
-                                    const newSounds = filesResult.files.map((file, index) => ({
-                                        id: Date.now() + index,
-                                        name: file.filename,
-                                        category: folderName,  // 使用文件夹名作为分类
-                                        duration: file.duration,
-                                        tags: ['已索引'],
-                                        filePath: file.path,
-                                        size: file.size,
-                                        type: '.' + file.format,
-                                        lastModified: new Date(),
-                                        folderPath: folderPath  // 保存文件夹路径
+                                // 获取文件列表 - 优先使用返回的 files，否则调用 getIndexedFiles
+                                let files = [];
+                                if (scanResult.files && scanResult.files.length > 0) {
+                                    files = scanResult.files;
+                                } else {
+                                    // 尝试从 getIndexedFiles 获取
+                                    try {
+                                        const filesResult = await window.electronAPI.backendAPI.getIndexedFiles();
+                                        files = filesResult.files || [];
+                                    } catch (e) {
+                                        console.log('getIndexedFiles 失败:', e);
+                                    }
+                                }
+                                
+                                if (files.length > 0) {
+                                    // 转换为前端格式，按文件夹分类，同时尝试获取时长
+                                    const newSounds = await Promise.all(files.map(async (file, index) => {
+                                        let duration = file.duration || 0;
+                                        
+                                        // 如果后端没有返回时长，尝试本地获取
+                                        if (!duration && file.path && window.electronAPI && window.electronAPI.readAudioFile) {
+                                            try {
+                                                const result = await window.electronAPI.readAudioFile(file.path);
+                                                if (result && result.success) {
+                                                    const uint8Array = new Uint8Array(result.data);
+                                                    const ext = (file.filename || '').split('.').pop().toLowerCase();
+                                                    const mimeTypes = {
+                                                        'wav': 'audio/wav', 'mp3': 'audio/mpeg', 'flac': 'audio/flac',
+                                                        'aiff': 'audio/aiff', 'aif': 'audio/aiff', 'ogg': 'audio/ogg',
+                                                        'm4a': 'audio/mp4', 'aac': 'audio/aac'
+                                                    };
+                                                    const mimeType = mimeTypes[ext] || 'audio/wav';
+                                                    const blob = new Blob([uint8Array], { type: mimeType });
+                                                    const url = URL.createObjectURL(blob);
+                                                    
+                                                    duration = await new Promise((resolve) => {
+                                                        const audio = new Audio();
+                                                        audio.onloadedmetadata = () => resolve(audio.duration * 1000);
+                                                        audio.onerror = () => resolve(0);
+                                                        audio.src = url;
+                                                    });
+                                                    URL.revokeObjectURL(url);
+                                                }
+                                            } catch (e) {
+                                                console.warn('获取音频时长失败:', e);
+                                            }
+                                        }
+                                        
+                                        return {
+                                            id: Date.now() + index,
+                                            name: file.filename || file.name,
+                                            category: folderName,
+                                            duration: duration,
+                                            tags: ['已索引'],
+                                            filePath: file.path,
+                                            size: file.size || 0,
+                                            type: file.type || '.' + (file.format || 'wav'),
+                                            lastModified: new Date(),
+                                            folderPath: folderPath
+                                        };
                                     }));
                                     
                                     // 添加到现有数据
@@ -1327,10 +1600,12 @@
                                     addFolderToTree(folderName, folderPath, newSounds.length);
                                     
                                     // 更新界面
+                                    updateCategoryData();
                                     renderSoundList();
                                     renderFolderTree();
-                                    renderCategoryTree();
                                     showNotification(`已加载 ${newSounds.length} 个音效文件`, 'success');
+                                } else {
+                                    showNotification('未找到音频文件', 'error');
                                 }
                             } else {
                                 showNotification('扫描失败: ' + (scanResult.error || '未知错误'), 'error');
@@ -1402,31 +1677,63 @@
                     showNotification(`成功导入 ${files.length} 个文件`, 'success');
                     
                     // 将文件添加到音效列表
-                    const newSounds = files.map((file, index) => {
+                    const newSounds = await Promise.all(files.map(async (file, index) => {
                         const soundId = Date.now() + index;
+                        
+                        // 尝试获取音频时长
+                        let duration = 0;
+                        try {
+                            if (file.path && window.electronAPI && window.electronAPI.readAudioFile) {
+                                const result = await window.electronAPI.readAudioFile(file.path);
+                                if (result && result.success) {
+                                    const uint8Array = new Uint8Array(result.data);
+                                    const ext = (file.name || '').split('.').pop().toLowerCase();
+                                    const mimeTypes = {
+                                        'wav': 'audio/wav', 'mp3': 'audio/mpeg', 'flac': 'audio/flac',
+                                        'aiff': 'audio/aiff', 'aif': 'audio/aiff', 'ogg': 'audio/ogg',
+                                        'm4a': 'audio/mp4', 'aac': 'audio/aac'
+                                    };
+                                    const mimeType = mimeTypes[ext] || 'audio/wav';
+                                    const blob = new Blob([uint8Array], { type: mimeType });
+                                    const url = URL.createObjectURL(blob);
+                                    
+                                    duration = await new Promise((resolve) => {
+                                        const audio = new Audio();
+                                        audio.onloadedmetadata = () => resolve(audio.duration * 1000);
+                                        audio.onerror = () => resolve(0);
+                                        audio.src = url;
+                                    });
+                                    URL.revokeObjectURL(url);
+                                }
+                            }
+                        } catch (e) {
+                            console.warn('获取音频时长失败:', e);
+                        }
+                        
                         return {
                             id: soundId,
                             name: file.name,
                             category: '导入文件',
-                            duration: 0, // 需要后续分析音频时长
+                            duration: duration,
                             tags: ['导入'],
                             filePath: file.path,
                             size: file.size,
                             type: file.type,
                             lastModified: file.lastModified
                         };
-                    });
+                    }));
 
                     // 添加到现有音效数据
                     soundData.push(...newSounds);
                     
                     // 更新界面
+                    updateCategoryData();
                     renderSoundList();
                     renderFolderTree();
-                    renderCategoryTree();
                     
                     // 显示导入成功消息
-                    showNotification(`成功添加 ${newSounds.length} 个音效文件`, 'success');
+                    const successCount = newSounds.filter(s => s.duration > 0).length;
+                    showNotification(`成功添加 ${newSounds.length} 个音效文件${successCount > 0 ? `，其中 ${successCount} 个已获取时长` : ''}`, 'success');
                     
                 } catch (error) {
                     console.error('处理导入文件时出错:', error);

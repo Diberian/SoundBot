@@ -1,8 +1,7 @@
+# -*- coding: utf-8 -*-
 # ChromaDB 索引模块
 
-使用 ChromaDB 创建本地向量数据库，保存音频 embedding 和元数据。
-支持增量更新（只处理新文件）。
-"""
+"""使用 ChromaDB 创建本地向量数据库，保存音频 embedding 和元数据。支持增量更新（只处理新文件）。"""
 
 import os
 import json
@@ -155,8 +154,23 @@ class AudioIndexer:
         
         print(f"[Indexer] 找到 {len(audio_files)} 个音频文件")
         
-        # 初始化 embedder
-        embedder = get_embedder()
+        # 尝试初始化 embedder，如果失败则跳过 embedding
+        embedder = None
+        try:
+            embedder = get_embedder()
+        except Exception as e:
+            print(f"[Indexer] 无法加载 CLAP 模型: {e}")
+            print(f"[Indexer] 将只扫描文件，不生成语义索引")
+        
+        # 如果没有 embedder，直接返回扫描结果（不建索引）
+        if embedder is None:
+            print(f"[Indexer] 跳过索引建立，直接返回 {len(audio_files)} 个文件")
+            return {
+                "added": 0,
+                "updated": 0,
+                "skipped": len(audio_files),
+                "files": [f.path for f in audio_files]
+            }
         
         # 分类文件：需要新增、需要更新、不需要处理
         to_add = []
@@ -182,6 +196,11 @@ class AudioIndexer:
         for file_id, file_path, audio_file in to_add:
             try:
                 # 生成 embedding
+                if embedder is None:
+                    # 没有 embedder 时，跳过 embedding
+                    print(f"[Indexer] 跳过 embedding: {file_path}")
+                    continue
+                    
                 embedding = embedder.audio_to_embedding(file_path)
                 
                 # 准备元数据

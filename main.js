@@ -1,7 +1,15 @@
-const { app, BrowserWindow, Menu, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, dialog, protocol, net, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
+
+// 自定义协议：用于在渲染进程中安全加载本地音频（避免 file:// 跨源限制）
+const AUDIO_PROTOCOL = 'soundmind-audio';
+
+// 必须在 app.ready 之前调用
+protocol.registerSchemesAsPrivileged([
+  { scheme: AUDIO_PROTOCOL, privileges: { standard: true, secure: true, supportFetchAPI: true } }
+]);
 
 let mainWindow;
 let backendProcess = null;
@@ -229,6 +237,30 @@ function setupIpcHandlers() {
     }
   });
 
+  // 读取本地音频文件（返回 ArrayBuffer，用于前端播放）
+  ipcMain.handle('read-audio-file', async (event, filePath) => {
+    console.log('[IPC] read-audio-file called with:', filePath);
+    try {
+      if (!filePath || !path.isAbsolute(filePath)) {
+        console.error('[IPC] Invalid path:', filePath);
+        return { success: false, error: '无效的文件路径' };
+      }
+      if (!fs.existsSync(filePath)) {
+        console.error('[IPC] File not exists:', filePath);
+        return { success: false, error: '文件不存在' };
+      }
+      const buffer = fs.readFileSync(filePath);
+      // 返回 ArrayBuffer（通过 buffer.buffer.slice 转换）
+      const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+      const result = { success: true, data: Array.from(new Uint8Array(arrayBuffer)) };
+      console.log('[IPC] File read success, size:', result.data.length);
+      return result;
+    } catch (error) {
+      console.error('[IPC] Read audio file error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   // 处理后端 API 请求
   ipcMain.handle('backend-api', async (event, action, data) => {
     try {
@@ -240,6 +272,18 @@ function setupIpcHandlers() {
 
         case 'scan': {
           const response = await fetch(`${API_BASE_URL}/scan`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              folder_path: data.folderPath,
+              recursive: data.recursive
+            })
+          });
+          return await response.json();
+        }
+
+        case 'scan-only': {
+          const response = await fetch(`${API_BASE_URL}/scan-only`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -397,6 +441,28 @@ async function stopBackendServer() {
 
 // 应用准备就绪时创建窗口
 app.whenReady().then(async () => {
+  // 注册自定义协议到默认 session，使渲染进程可安全加载本地音频
+  const defaultSession = session.defaultSession;
+  
+  defaultSession.protocol.handle(AUDIO_PROTOCOL, (request) => {
+    try {
+      const u = new URL(request.url);
+      // u.pathname 包含开头的 /，如 "/Volumes/Studio%20Hub/..."
+      let filePath = decodeURIComponent(u.pathname);
+      
+      console.log('[soundmind-audio] Request:', request.url, '-> File:', filePath);
+      
+      if (!filePath || !path.isAbsolute(filePath)) {
+        console.error('[soundmind-audio] Invalid path:', filePath);
+        return new Response('Invalid path', { status: 400 });
+      }
+      return net.fetch('file://' + filePath);
+    } catch (e) {
+      console.error('soundmind-audio protocol error:', e);
+      return new Response('Error', { status: 500 });
+    }
+  });
+
   createWindow();
   
   // 自动启动后端服务

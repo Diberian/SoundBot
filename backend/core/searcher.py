@@ -1,8 +1,7 @@
+# -*- coding: utf-8 -*-
 # 语义搜索模块
 
-接收文本查询，生成 embedding，在 ChromaDB 中搜索最相似的音频。
-返回 Top-K 结果，包含文件路径和相似度分数。
-"""
+"""接收文本查询，生成 embedding，在 ChromaDB 中搜索最相似的音频。返回 Top-K 结果，包含文件路径和相似度分数。"""
 
 from typing import List, Optional, Dict, Any
 

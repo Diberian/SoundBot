@@ -101,6 +101,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     show: (title, body, options) => ipcRenderer.invoke('notification-show', { title, body, options })
   },
 
+  // 读取本地音频文件并返回 ArrayBuffer（用于播放）
+  readAudioFile: (filePath) => ipcRenderer.invoke('read-audio-file', filePath),
+
   // 后端 API（与 FastAPI 服务通信）
   backendAPI: {
     // 健康检查
@@ -109,6 +112,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // 扫描并索引音频文件夹
     scanFolder: (folderPath, recursive = true) => 
       ipcRenderer.invoke('backend-api', 'scan', { folderPath, recursive }),
+
+    // 仅扫描文件不建索引（用于没有模型的情况）
+    scanOnly: (folderPath, recursive = true) =>
+      ipcRenderer.invoke('backend-api', 'scan-only', { folderPath, recursive }),
 
     // 语义搜索音频
     searchAudio: (query, topK = 20, threshold = 0.15) => 

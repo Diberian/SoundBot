@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 CLAP 音频-文本嵌入模型封装
 
@@ -135,11 +136,15 @@ class CLIPEmbedder:
 _embedder: Optional[CLIPEmbedder] = None
 
 
-def get_embedder() -> CLIPEmbedder:
-    """获取 Embedder 单例（延迟加载）"""
+def get_embedder() -> Optional[CLIPEmbedder]:
+    """获取 Embedder 单例（延迟加载），如果加载失败返回 None"""
     global _embedder
     if _embedder is None:
-        _embedder = CLIPEmbedder()
+        try:
+            _embedder = CLIPEmbedder()
+        except Exception as e:
+            print(f"[Embedder] 无法加载模型: {e}")
+            _embedder = None
     return _embedder
 
 
