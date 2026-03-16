@@ -127,11 +127,7 @@ class CLIPEmbedder:
     
     def get_embedding_dim(self) -> int:
         """获取 embedding 向量的维度"""
-        # 创建一个测试输入来获取维度
-        dummy_audio = np.zeros(48000)  # 1秒静音
-        embedding = self.audio_to_embedding.__wrapped__(self, "")
-        # 由于 audio_to_embedding 需要真实文件，这里返回典型维度
-        # CLAP 模型通常是 512 或 768 维
+        # CLAP 模型固定维度为 512
         return 512
 
 

@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 import config
 from core.embedder import get_embedder
+from core.indexer import get_chroma_client
 
 
 class SearchResult(BaseModel):
@@ -44,15 +45,8 @@ class AudioSearcher:
         self.persist_directory = persist_directory
         self.collection_name = collection_name
         
-        # 导入 ChromaDB 客户端
-        import chromadb
-        from chromadb.config import Settings
-        
-        # 初始化 ChromaDB 客户端
-        self.client = chromadb.PersistentClient(
-            path=persist_directory,
-            settings=Settings(anonymized_telemetry=False)
-        )
+        # 使用全局 ChromaDB 客户端（与 Indexer 共用）
+        self.client = get_chroma_client(persist_directory)
         
         # 获取 collection
         try:

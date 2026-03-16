@@ -19,6 +19,30 @@ from core.embedder import get_embedder
 from core.scanner import AudioScanner
 
 
+# 全局 ChromaDB 客户端（单例）
+_chroma_client: Optional[chromadb.PersistentClient] = None
+
+
+def get_chroma_client(persist_directory: Optional[str] = None) -> chromadb.PersistentClient:
+    """获取全局 ChromaDB 客户端（单例）"""
+    global _chroma_client
+    if _chroma_client is None:
+        if persist_directory is None:
+            persist_directory = str(config.get_db_path())
+        Path(persist_directory).mkdir(parents=True, exist_ok=True)
+        _chroma_client = chromadb.PersistentClient(
+            path=persist_directory,
+            settings=Settings(anonymized_telemetry=False)
+        )
+    return _chroma_client
+
+
+def reset_chroma_client() -> None:
+    """重置 ChromaDB 客户端（用于测试或重新初始化）"""
+    global _chroma_client
+    _chroma_client = None
+
+
 class AudioIndexer:
     """音频向量索引器，使用 ChromaDB 存储音频 embeddings"""
 
@@ -40,17 +64,13 @@ class AudioIndexer:
         self.persist_directory = persist_directory
         self.collection_name = collection_name
         
-        # 确保目���存在
+        # 确保目录存在
         Path(persist_directory).mkdir(parents=True, exist_ok=True)
         
-        # 初始化 ChromaDB 客户端
-        self.client = chromadb.PersistentClient(
-            path=persist_directory,
-            settings=Settings(anonymized_telemetry=False)
-        )
+        # 使用全局 ChromaDB 客户端
+        self.client = get_chroma_client(persist_directory)
         
         # 获取或创建 collection
-        # 使用余弦相似度
         self.collection = self.client.get_or_create_collection(
             name=collection_name,
             metadata={"description": "Audio file embeddings for semantic search"}

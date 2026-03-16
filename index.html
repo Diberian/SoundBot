@@ -330,6 +330,68 @@
         let currentVolume = 80;
         let isMuted = false;
         let activeCategory = 'tag-all';
+        
+        // ==================== AUDIO PLAYER ====================
+        let audioPlayer = null;
+        
+        function initAudioPlayer() {
+            audioPlayer = new Audio();
+            audioPlayer.addEventListener('ended', () => {
+                if (isLooping) {
+                    audioPlayer.currentTime = 0;
+                    audioPlayer.play();
+                } else {
+                    isPlaying = false;
+                    if (playbackInterval) clearInterval(playbackInterval);
+                    updatePlaybackUI();
+                    renderSoundList(document.getElementById('searchInput').value);
+                }
+            });
+            audioPlayer.addEventListener('timeupdate', () => {
+                if (audioPlayer && currentSound) {
+                    playbackProgress = audioPlayer.currentTime * 1000;
+                    updatePlaybackUI();
+                }
+            });
+            audioPlayer.addEventListener('loadedmetadata', () => {
+                if (currentSound) {
+                    currentSound.duration = audioPlayer.duration * 1000;
+                    updatePlaybackUI();
+                }
+            });
+            audioPlayer.addEventListener('error', (e) => {
+                console.error('音频加载失败:', e);
+                showNotification('音频加载失败', 'error');
+                isPlaying = false;
+                updatePlaybackUI();
+            });
+        }
+        
+        async function loadAndPlaySound(sound) {
+            if (!audioPlayer) initAudioPlayer();
+            
+            try {
+                let audioSrc = sound.filePath;
+                
+                // 如果是 Electron 环境且有后端 API，转换文件路径为 API URL
+                if (sound.filePath && window.electronAPI && window.electronAPI.backendAPI && !sound.filePath.startsWith('http')) {
+                    audioSrc = await window.electronAPI.backendAPI.getAudioUrl(sound.filePath);
+                }
+                
+                audioPlayer.src = audioSrc;
+                audioPlayer.volume = currentVolume / 100;
+                audioPlayer.muted = isMuted;
+                audioPlayer.loop = isLooping;
+                
+                await audioPlayer.play();
+                isPlaying = true;
+                updatePlaybackUI();
+                renderSoundList(document.getElementById('searchInput').value);
+            } catch (error) {
+                console.error('播放失败:', error);
+                showNotification('播放失败: ' + error.message, 'error');
+            }
+        }
 
         // ==================== UTILS ====================
         function formatTime(ms) {
@@ -557,45 +619,45 @@
                 pausePlayback();
             } else {
                 currentSound = sound;
-                startPlayback();
+                loadAndPlaySound(sound);
             }
         }
 
         // ==================== PLAYBACK ====================
         function startPlayback() {
-            isPlaying = true;
-            updatePlaybackUI();
-            renderSoundList(document.getElementById('searchInput').value);
+            if (!currentSound) return;
             
-            if (playbackInterval) clearInterval(playbackInterval);
-            playbackInterval = setInterval(() => {
-                if (!currentSound) return;
-                
-                playbackProgress += 100;
-                if (playbackProgress >= currentSound.duration) {
-                    if (isLooping) {
-                        playbackProgress = 0;
-                    } else {
-                        playbackProgress = 0;
-                        isPlaying = false;
-                        clearInterval(playbackInterval);
-                    }
-                }
-                updatePlaybackUI();
-            }, 100);
-        }
-
-        function pausePlayback() {
-            isPlaying = false;
-            if (playbackInterval) clearInterval(playbackInterval);
+            if (audioPlayer && audioPlayer.src) {
+                audioPlayer.play().catch(error => {
+                    console.error('播放失败:', error);
+                    showNotification('播放失败: ' + error.message, 'error');
+                });
+                isPlaying = true;
+            } else {
+                // 如果没有音频源，重新加载
+                loadAndPlaySound(currentSound);
+            }
+            
             updatePlaybackUI();
             renderSoundList(document.getElementById('searchInput').value);
         }
-
+        
+        function pausePlayback() {
+            if (audioPlayer) {
+                audioPlayer.pause();
+            }
+            isPlaying = false;
+            updatePlaybackUI();
+            renderSoundList(document.getElementById('searchInput').value);
+        }
+        
         function stopPlayback() {
+            if (audioPlayer) {
+                audioPlayer.pause();
+                audioPlayer.currentTime = 0;
+            }
             isPlaying = false;
             playbackProgress = 0;
-            if (playbackInterval) clearInterval(playbackInterval);
             updatePlaybackUI();
             renderSoundList(document.getElementById('searchInput').value);
         }
@@ -749,6 +811,7 @@
         // ==================== EVENT LISTENERS ====================
         document.addEventListener('DOMContentLoaded', () => {
             // Initialize
+            initAudioPlayer();
             renderFolderTree();
             renderCategoryTree();
             renderSoundList();
@@ -776,9 +839,54 @@
                 });
             });
             
-            // Search
+            // Search - 支持本地和后端语义搜索
+            let searchTimeout = null;
             document.getElementById('searchInput').addEventListener('input', (e) => {
-                renderSoundList(e.target.value);
+                const query = e.target.value.trim();
+                
+                // 防抖处理
+                if (searchTimeout) clearTimeout(searchTimeout);
+                
+                if (!query) {
+                    // 空搜索时显示本地数据
+                    renderSoundList('');
+                    return;
+                }
+                
+                // 如果是自然语言查询，调用后端语义搜索
+                if (query.length >= 2 && window.electronAPI && window.electronAPI.backendAPI) {
+                    searchTimeout = setTimeout(async () => {
+                        try {
+                            showNotification('正在搜索...', 'info');
+                            const result = await window.electronAPI.backendAPI.searchAudio(query, 20, 0.1);
+                            if (result && result.results) {
+                                // 将后端结果转换为前端格式
+                                const backendSounds = result.results.map((r, index) => ({
+                                    id: Date.now() + index,
+                                    name: r.audio_file.filename,
+                                    category: '搜索结果',
+                                    duration: r.audio_file.duration,
+                                    tags: ['AI搜索'],
+                                    filePath: r.audio_file.path,
+                                    size: r.audio_file.size || 0,
+                                    type: '.' + r.audio_file.format,
+                                    similarity: r.score,
+                                    lastModified: new Date()
+                                }));
+                                renderSoundList('', backendSounds);
+                                showNotification(`找到 ${backendSounds.length} 个结果`, 'success');
+                            }
+                        } catch (error) {
+                            console.error('搜索失败:', error);
+                            showNotification('搜索失败: ' + error.message, 'error');
+                            // 降级到本地搜索
+                            renderSoundList(query);
+                        }
+                    }, 500);
+                } else {
+                    // 本地搜索
+                    renderSoundList(query);
+                }
             });
             
             // Select All
@@ -832,7 +940,14 @@
                 if (!currentSound) return;
                 const rect = e.currentTarget.getBoundingClientRect();
                 const progress = (e.clientX - rect.left) / rect.width;
-                playbackProgress = Math.floor(progress * currentSound.duration);
+                
+                if (audioPlayer) {
+                    audioPlayer.currentTime = progress * audioPlayer.duration;
+                    playbackProgress = audioPlayer.currentTime * 1000;
+                } else {
+                    playbackProgress = Math.floor(progress * currentSound.duration);
+                }
+                
                 updatePlaybackUI();
                 drawMainWaveform();
             });
@@ -840,9 +955,13 @@
             // Volume
             const volumeSlider = document.getElementById('volumeSlider');
             volumeSlider.addEventListener('input', (e) => {
-                currentVolume = e.target.value;
+                currentVolume = parseInt(e.target.value);
                 document.getElementById('volumeValue').textContent = `${currentVolume}%`;
                 volumeSlider.style.background = `linear-gradient(to right, var(--text-primary) ${currentVolume}%, var(--border-color) ${currentVolume}%)`;
+                
+                if (audioPlayer) {
+                    audioPlayer.volume = currentVolume / 100;
+                }
                 
                 if (currentVolume > 0 && isMuted) {
                     isMuted = false;
@@ -900,30 +1019,55 @@
             }, 100);
 
             // ==================== 文件导入功能 ====================
-            
-            // 导入按钮事件
+
+            // 导入按钮事件 - 支持文件夹扫描和后端索引
             document.getElementById('importBtn').addEventListener('click', async () => {
                 try {
                     // 检查 Electron API 是否可用
-                    if (window.electronAPI && window.electronAPI.fileImport) {
-                        const result = await window.electronAPI.fileImport.selectAudioFiles({
-                            title: '选择音频文件',
-                            filters: [
-                                { name: '音频文件', extensions: ['wav', 'mp3', 'aac', 'flac', 'ogg', 'm4a'] },
-                                { name: '所有文件', extensions: ['*'] }
-                            ]
+                    if (window.electronAPI && window.electronAPI.fileImport && window.electronAPI.backendAPI) {
+                        // 使用 Electron 对话框选择文件夹
+                        const folderResult = await window.electronAPI.fileImport.selectFolder({
+                            title: '选择音频文件夹'
                         });
 
-                        if (result.success && result.files) {
-                            // 处理选中的文件
-                            await handleImportedFiles(result.files);
-                        } else if (result.canceled) {
-                            console.log('用户取消了文件选择');
-                        } else {
-                            console.error('文件选择失败:', result.error);
+                        if (folderResult.success && folderResult.folder) {
+                            // 调用后端扫描并索引
+                            showNotification('正在扫描并索引音频文件...', 'info');
+                            const scanResult = await window.electronAPI.backendAPI.scanFolder(folderResult.folder, true);
+                            
+                            if (scanResult && !scanResult.error) {
+                                showNotification(`索引完成: 新增 ${scanResult.indexed} 个文件`, 'success');
+                                
+                                // 获取索引后的文件列表
+                                const filesResult = await window.electronAPI.backendAPI.getIndexedFiles();
+                                if (filesResult && filesResult.files) {
+                                    // 转换为前端格式
+                                    const newSounds = filesResult.files.map((file, index) => ({
+                                        id: Date.now() + index,
+                                        name: file.filename,
+                                        category: '已索引',
+                                        duration: file.duration,
+                                        tags: ['已索引'],
+                                        filePath: file.path,
+                                        size: file.size,
+                                        type: '.' + file.format,
+                                        lastModified: new Date()
+                                    }));
+                                    
+                                    soundData = newSounds;
+                                    renderSoundList();
+                                    renderFolderTree();
+                                    renderCategoryTree();
+                                    showNotification(`已加载 ${newSounds.length} 个音效文件`, 'success');
+                                }
+                            } else {
+                                showNotification('扫描失败: ' + (scanResult.error || '未知错误'), 'error');
+                            }
+                        } else if (folderResult.canceled) {
+                            console.log('用户取消了文件夹选择');
                         }
                     } else {
-                        // 在浏览器环境中使用原生文件选择
+                        // 降级到浏览器原生文件选择
                         const input = document.createElement('input');
                         input.type = 'file';
                         input.accept = '.wav,.mp3,.aac,.flac,.ogg,.m4a';
@@ -935,8 +1079,8 @@
                         input.click();
                     }
                 } catch (error) {
-                    console.error('导入文件时出错:', error);
-                    showNotification('导入文件失败: ' + error.message, 'error');
+                    console.error('导入文件夹时出错:', error);
+                    showNotification('导入失败: ' + error.message, 'error');
                 }
             });
 
