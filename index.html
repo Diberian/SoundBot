@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SoundMind - AI 音效管理器</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #404040; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #525252; }
+        html:not(.dark) ::-webkit-scrollbar-thumb { background: #d4d4d4; }
+        html:not(.dark) ::-webkit-scrollbar-thumb:hover { background: #a3a3a3; }
+        
+        .waveform-canvas { image-rendering: pixelated; }
+        
+        input[type="range"] {
+            -webkit-appearance: none; appearance: none; background: transparent; cursor: pointer;
+        }
+        input[type="range"]::-webkit-slider-track { height: 4px; border-radius: 2px; }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 12px; height: 12px;
+            border-radius: 50%; background: var(--text-primary); margin-top: -4px; transition: transform 0.15s ease;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+        
+        @keyframes sound-bar {
+            from { transform: scaleY(0.3); }
+            to { transform: scaleY(1); }
+        }
+        .playing-indicator span { animation: sound-bar 0.5s ease-in-out infinite alternate; }
+        .playing-indicator span:nth-child(1) { animation-delay: 0s; }
+        .playing-indicator span:nth-child(2) { animation-delay: 0.1s; }
+        .playing-indicator span:nth-child(3) { animation-delay: 0.2s; }
+        .playing-indicator span:nth-child(4) { animation-delay: 0.3s; }
+        
+        .sidebar-item { transition: all 0.15s ease; }
+        .sidebar-item:hover { background-color: rgba(128, 128, 128, 0.1); }
+        .sidebar-item.active { background-color: rgba(128, 128, 128, 0.2); border-left: 3px solid var(--text-primary); }
+        
+        .sound-row { transition: all 0.15s ease; }
+        .sound-row:hover { background-color: rgba(128, 128, 128, 0.05); }
+        .sound-row.selected { background-color: rgba(128, 128, 128, 0.15); }
+        
+        .dropdown-menu { transform-origin: top right; transition: all 0.15s ease; }
+        .dropdown-menu.hidden { opacity: 0; transform: scale(0.95); pointer-events: none; }
+        .dropdown-menu.visible { opacity: 1; transform: scale(1); pointer-events: auto; }
+        
+        :root {
+            --bg-primary: #ffffff; --bg-secondary: #fafafa; --bg-tertiary: #f5f5f5;
+            --border-color: #e5e5e5; --text-primary: #171717; --text-secondary: #737373;
+        }
+        html.dark {
+            --bg-primary: #0a0a0a; --bg-secondary: #141414; --bg-tertiary: #1a1a1a;
+            --border-color: #262626; --text-primary: #e5e5e5; --text-secondary: #a3a3a3;
+        }
+        body { background-color: var(--bg-primary); color: var(--text-primary); }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden font-sans transition-colors duration-300">
+    
+    <!-- ==================== TOP TOOLBAR ==================== -->
+    <header class="h-14 border-b flex items-center justify-between px-4 shrink-0 transition-colors duration-300"
+            style="border-color: var(--border-color); background-color: var(--bg-secondary);">
+        
+        <!-- Left: App Name Only -->
+        <div class="flex items-center">
+            <span class="font-semibold text-lg tracking-tight">SoundWave Pro</span>
+        </div>
+        
+        <!-- Center: Menu -->
+        <nav class="flex items-center gap-1">
+            <button class="menu-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors hover:bg-black/5 dark:hover:bg-white/5">文件</button>
+            <button class="menu-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-1.5">
+                <i data-lucide="upload" class="w-4 h-4"></i>导入
+            </button>
+            <div class="relative">
+                <button id="settingsBtn" class="menu-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-1.5">
+                    <i data-lucide="settings" class="w-4 h-4"></i>设置
+                </button>
+                <!-- Settings Dropdown -->
+                <div id="settingsDropdown" class="dropdown-menu hidden absolute top-full left-0 mt-2 w-64 rounded-lg shadow-xl border py-2 z-50"
+                     style="background-color: var(--bg-secondary); border-color: var(--border-color);">
+                    <div class="px-3 py-2 text-xs font-medium uppercase tracking-wider opacity-50">语言</div>
+                    <button class="w-full px-4 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-between setting-option" data-type="lang" data-value="zh">
+                        <span>中文</span><i data-lucide="check" class="w-4 h-4 check-icon"></i>
+                    </button>
+                    <button class="w-full px-4 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-between setting-option opacity-50" data-type="lang" data-value="en">
+                        <span>English</span><i data-lucide="check" class="w-4 h-4 check-icon hidden"></i>
+                    </button>
+                    <div class="border-t my-2" style="border-color: var(--border-color);"></div>
+                    <div class="px-3 py-2 text-xs font-medium uppercase tracking-wider opacity-50">AI 模型</div>
+                    <button class="w-full px-4 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-between setting-option" data-type="model" data-value="gpt4">
+                        <span>GPT-4</span><i data-lucide="check" class="w-4 h-4 check-icon"></i>
+                    </button>
+                    <button class="w-full px-4 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-between setting-option opacity-50" data-type="model" data-value="claude">
+                        <span>Claude 3</span><i data-lucide="check" class="w-4 h-4 check-icon hidden"></i>
+                    </button>
+                    <button class="w-full px-4 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-between setting-option opacity-50" data-type="model" data-value="gemini">
+                        <span>Gemini Pro</span><i data-lucide="check" class="w-4 h-4 check-icon hidden"></i>
+                    </button>
+                    <div class="border-t my-2" style="border-color: var(--border-color);"></div>
+                    <div class="px-3 py-2 text-xs font-medium uppercase tracking-wider opacity-50">Embedding 模型</div>
+                    <button class="w-full px-4 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-between setting-option" data-type="embedding" data-value="openai">
+                        <span>OpenAI Embedding</span><i data-lucide="check" class="w-4 h-4 check-icon"></i>
+                    </button>
+                    <button class="w-full px-4 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-between setting-option opacity-50" data-type="embedding" data-value="local">
+                        <span>本地模型</span><i data-lucide="check" class="w-4 h-4 check-icon hidden"></i>
+                    </button>
+                    <div class="border-t my-2" style="border-color: var(--border-color);"></div>
+                    <button id="themeToggle" class="w-full px-4 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-2">
+                        <i data-lucide="sun" class="w-4 h-4 dark:hidden"></i>
+                        <i data-lucide="moon" class="w-4 h-4 hidden dark:block"></i>
+                        <span class="dark:hidden">切换深色模式</span>
+                        <span class="hidden dark:block">切换浅色模式</span>
+                    </button>
+                </div>
+            </div>
+        </nav>
+        
+        <!-- Right: Search -->
+        <div class="flex items-center gap-3">
+            <div class="relative">
+                <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 opacity-50"></i>
+                <input type="text" id="searchInput" placeholder="搜索音效..." 
+                       class="w-64 h-9 pl-9 pr-4 rounded-lg text-sm border transition-all focus:outline-none focus:ring-2 focus:ring-gray-500/50"
+                       style="background-color: var(--bg-tertiary); border-color: var(--border-color); color: var(--text-primary);">
+            </div>
+        </div>
+    </header>
+    
+    <!-- ==================== MAIN CONTENT ==================== -->
+    <div class="flex-1 flex overflow-hidden">
+        
+        <!-- ==================== LEFT SIDEBAR: FOLDER & CATEGORY ==================== -->
+        <aside class="w-56 border-r flex flex-col shrink-0 transition-colors duration-300"
+               style="border-color: var(--border-color); background-color: var(--bg-secondary);">
+            
+            <!-- Folder Section -->
+            <div class="h-10 flex items-center px-4 border-b text-xs font-medium uppercase tracking-wider opacity-70"
+                 style="border-color: var(--border-color);">
+                <i data-lucide="folder-tree" class="w-4 h-4 mr-2"></i>文件夹
+            </div>
+            <div class="overflow-y-auto p-2" id="folderTree" style="max-height: 45%;"></div>
+            
+            <!-- Divider -->
+            <div class="border-t" style="border-color: var(--border-color);"></div>
+            
+            <!-- Category Section -->
+            <div class="h-10 flex items-center px-4 border-b text-xs font-medium uppercase tracking-wider opacity-70"
+                 style="border-color: var(--border-color);">
+                <i data-lucide="tags" class="w-4 h-4 mr-2"></i>分类
+            </div>
+            <div class="flex-1 overflow-y-auto p-2" id="categoryTree"></div>
+        </aside>
+        
+        <!-- ==================== CENTER: WAVEFORM LIST ==================== -->
+        <main class="flex-1 flex flex-col min-w-0">
+            <div class="h-10 flex items-center border-b px-4 text-xs font-medium uppercase tracking-wider opacity-70 shrink-0"
+                 style="border-color: var(--border-color);">
+                <div class="w-10 flex justify-center"><input type="checkbox" id="selectAll" class="w-4 h-4 rounded border-gray-300"></div>
+                <div class="w-12 flex justify-center">封面</div>
+                <div class="w-32 flex justify-center">波形</div>
+                <div class="flex-1 min-w-0">文件名</div>
+                <div class="w-24 text-right">时长</div>
+                <div class="w-16 flex justify-center">操作</div>
+            </div>
+            <div class="flex-1 overflow-y-auto" id="soundList"></div>
+        </main>
+        
+        <!-- ==================== RIGHT: AI CHAT ==================== -->
+        <aside class="w-80 border-l flex flex-col shrink-0 transition-colors duration-300"
+               style="border-color: var(--border-color); background-color: var(--bg-secondary);">
+            <div class="h-10 flex items-center px-4 border-b text-xs font-medium uppercase tracking-wider opacity-70"
+                 style="border-color: var(--border-color);">
+                <i data-lucide="bot" class="w-4 h-4 mr-2"></i>AI 助手
+            </div>
+            <div class="flex-1 overflow-y-auto p-4 space-y-4" id="chatMessages">
+                <div class="chat-message">
+                    <div class="flex items-start gap-2">
+                        <div class="w-7 h-7 rounded-full border flex items-center justify-center shrink-0" style="border-color: var(--border-color);">
+                            <i data-lucide="bot" class="w-4 h-4"></i>
+                        </div>
+                        <div class="flex-1">
+                            <div class="rounded-2xl rounded-tl-sm px-4 py-3 text-sm" style="background-color: var(--bg-tertiary);">
+                                你好！我是你的音效管理助手。你可以用自然语言描述你需要的音效，比如：
+                            </div>
+                            <div class="mt-2 flex flex-wrap gap-2">
+                                <button class="example-prompt px-3 py-1.5 rounded-full text-xs border transition-colors hover:border-gray-500" style="border-color: var(--border-color);">"帮我找一段雨声音效"</button>
+                                <button class="example-prompt px-3 py-1.5 rounded-full text-xs border transition-colors hover:border-gray-500" style="border-color: var(--border-color);">"需要恐怖氛围的音效"</button>
+                                <button class="example-prompt px-3 py-1.5 rounded-full text-xs border transition-colors hover:border-gray-500" style="border-color: var(--border-color);">"找一段轻快的背景音乐"</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="p-4 border-t" style="border-color: var(--border-color);">
+                <div class="relative">
+                    <textarea id="chatInput" rows="2" placeholder="输入你的需求..."
+                              class="w-full px-3 py-2 pr-10 rounded-lg text-sm border resize-none transition-all focus:outline-none focus:ring-2 focus:ring-gray-500/50"
+                              style="background-color: var(--bg-tertiary); border-color: var(--border-color); color: var(--text-primary);"></textarea>
+                    <button id="sendMessage" class="absolute right-2 bottom-2 w-7 h-7 rounded-lg border flex items-center justify-center transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+                            style="border-color: var(--border-color);">
+                        <i data-lucide="send" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+        </aside>
+    </div>
+    
+    <!-- ==================== WAVEFORM VISUALIZATION ==================== -->
+    <div class="h-32 border-t shrink-0 relative transition-colors duration-300"
+         style="border-color: var(--border-color); background-color: var(--bg-secondary);">
+        <canvas id="mainWaveform" class="w-full h-full waveform-canvas"></canvas>
+        <div class="absolute top-0 left-0 right-0 h-6 flex items-end text-xs opacity-50 px-4 pointer-events-none" style="color: var(--text-secondary);">
+            <span class="absolute left-4">00:00</span>
+            <span class="absolute" style="left: 25%">00:05</span>
+            <span class="absolute" style="left: 50%">00:10</span>
+            <span class="absolute" style="left: 75%">00:15</span>
+            <span class="absolute right-4" id="totalTimeDisplay">00:20</span>
+        </div>
+        <div id="playhead" class="absolute top-6 bottom-0 w-px pointer-events-none transition-all" style="left: 0%; background-color: var(--text-primary);">
+            <div class="absolute -top-1 -left-1.5 w-3 h-3 rounded-full" style="background-color: var(--text-primary);"></div>
+        </div>
+    </div>
+    
+    <!-- ==================== BOTTOM CONTROLS ==================== -->
+    <footer class="h-16 border-t flex items-center justify-between px-4 shrink-0 transition-colors duration-300"
+            style="border-color: var(--border-color); background-color: var(--bg-secondary);">
+        
+        <!-- Playback Controls -->
+        <div class="flex items-center gap-2">
+            <button id="prevBtn" class="w-9 h-9 rounded-lg flex items-center justify-center transition-colors hover:bg-black/5 dark:hover:bg-white/5 opacity-50 hover:opacity-100">
+                <i data-lucide="skip-back" class="w-5 h-5"></i>
+            </button>
+            <button id="playPauseBtn" class="w-11 h-11 rounded-full border flex items-center justify-center transition-all hover:scale-105"
+                    style="border-color: var(--border-color);">
+                <i data-lucide="play" class="w-5 h-5 ml-0.5" id="playIcon"></i>
+                <i data-lucide="pause" class="w-5 h-5 hidden" id="pauseIcon"></i>
+            </button>
+            <button id="stopBtn" class="w-9 h-9 rounded-lg flex items-center justify-center transition-colors hover:bg-black/5 dark:hover:bg-white/5">
+                <i data-lucide="square" class="w-5 h-5"></i>
+            </button>
+            <button id="nextBtn" class="w-9 h-9 rounded-lg flex items-center justify-center transition-colors hover:bg-black/5 dark:hover:bg-white/5 opacity-50 hover:opacity-100">
+                <i data-lucide="skip-forward" class="w-5 h-5"></i>
+            </button>
+            <button id="loopBtn" class="w-9 h-9 rounded-lg flex items-center justify-center transition-colors hover:bg-black/5 dark:hover:bg-white/5 opacity-50" title="循环播放">
+                <i data-lucide="repeat" class="w-5 h-5"></i>
+            </button>
+        </div>
+        
+        <!-- Progress Bar -->
+        <div class="flex-1 max-w-xl mx-8 flex items-center gap-3">
+            <span class="text-xs font-mono w-12 text-right" id="currentTime">00:00</span>
+            <div class="flex-1 progress-container h-1.5 rounded-full overflow-hidden" style="background-color: var(--border-color);" id="progressContainer">
+                <div id="progressBar" class="h-full rounded-full relative" style="width: 0%; background-color: var(--text-primary);">
+                    <div class="progress-handle" style="right: -6px; background-color: var(--text-primary);"></div>
+                </div>
+            </div>
+            <span class="text-xs font-mono w-12" id="durationTime">00:00</span>
+        </div>
+        
+        <!-- Volume Control -->
+        <div class="flex items-center gap-3">
+            <button id="muteBtn" class="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-black/5 dark:hover:bg-white/5">
+                <i data-lucide="volume-2" class="w-4 h-4" id="volumeIcon"></i>
+            </button>
+            <div class="w-24">
+                <input type="range" id="volumeSlider" min="0" max="100" value="80" class="w-full">
+            </div>
+            <span class="text-xs font-mono w-8" id="volumeValue">80%</span>
+        </div>
+    </footer>
+
+    <!-- ==================== JAVASCRIPT ==================== -->
+    <script>
+        // ==================== DATA ====================
+        const soundData = [
+            { id: 1, name: 'rain_light_01.wav', category: '自然音效', duration: 15230, tags: ['雨声', '自然', '轻柔'] },
+            { id: 2, name: 'thunder_deep_02.wav', category: '自然音效', duration: 8450, tags: ['雷声', '自然', '深沉'] },
+            { id: 3, name: 'footsteps_wood_03.wav', category: '人声动作', duration: 12100, tags: ['脚步声', '木质', '动作'] },
+            { id: 4, name: 'doorbell_classic.wav', category: '机械音效', duration: 3500, tags: ['门铃', '经典', '机械'] },
+            { id: 5, name: 'car_engine_idle.wav', category: '机械音效', duration: 20000, tags: ['汽车', '引擎', '机械'] },
+            { id: 6, name: 'birds_morning_chorus.wav', category: '自然音效', duration: 18750, tags: ['鸟叫', '自然', '清晨'] },
+            { id: 7, name: 'keyboard_typing_fast.wav', category: '人声动作', duration: 10200, tags: ['键盘', '打字', '快速'] },
+            { id: 8, name: 'phone_ring_old.wav', category: '机械音效', duration: 5800, tags: ['电话', '铃声', '复古'] },
+            { id: 9, name: 'wind_howling_storm.wav', category: '自然音效', duration: 25400, tags: ['风声', '风暴', '自然'] },
+            { id: 10, name: 'explosion_distant_01.wav', category: '拟音', duration: 6300, tags: ['爆炸', '远处', '特效'] },
+        ];
+
+        const folderData = [
+            { id: 'root', name: '音效库', expanded: true, children: [
+                { id: 'nature', name: '自然音效', count: 5 },
+                { id: 'human', name: '人声动作', count: 2 },
+                { id: 'mechanical', name: '机械音效', count: 3 },
+                { id: 'foley', name: '拟音', count: 1 },
+                { id: 'ambient', name: '环境音', count: 0 },
+            ]}
+        ];
+
+        const categoryData = [
+            { id: 'tag-all', name: '全部', count: 10 },
+            { id: 'tag-nature', name: '自然', count: 5 },
+            { id: 'tag-mechanical', name: '机械', count: 3 },
+            { id: 'tag-human', name: '人声', count: 2 },
+            { id: 'tag-foley', name: '拟音', count: 1 },
+            { id: 'tag-short', name: '短音效 (<5s)', count: 2 },
+            { id: 'tag-medium', name: '中音效 (5-15s)', count: 5 },
+            { id: 'tag-long', name: '长音效 (>15s)', count: 3 },
+        ];
+
+        // ==================== STATE ====================
+        let currentSound = null;
+        let isPlaying = false;
+        let isLooping = false;
+        let playbackProgress = 0;
+        let playbackInterval = null;
+        let selectedSounds = new Set();
+        let currentVolume = 80;
+        let isMuted = false;
+        let activeCategory = 'tag-all';
+
+        // ==================== UTILS ====================
+        function formatTime(ms) {
+            const totalSeconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            const milliseconds = Math.floor((ms % 1000) / 10);
+            return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(2, '0')}`;
+        }
+
+        function formatTimeShort(ms) {
+            const totalSeconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        // ==================== FOLDER TREE ====================
+        function renderFolderTree() {
+            const container = document.getElementById('folderTree');
+            container.innerHTML = '';
+            
+            folderData.forEach(folder => {
+                container.appendChild(createFolderItem(folder, 0));
+            });
+        }
+
+        function createFolderItem(folder, level) {
+            const div = document.createElement('div');
+            div.className = 'sidebar-item rounded-md cursor-pointer';
+            div.style.paddingLeft = `${level * 12 + 8}px`;
+            div.dataset.id = folder.id;
+            
+            const hasChildren = folder.children && folder.children.length > 0;
+            const expandIcon = hasChildren ? (folder.expanded ? 'chevron-down' : 'chevron-right') : 'minus';
+            
+            div.innerHTML = `
+                <div class="flex items-center gap-2 py-2 px-2 rounded-md">
+                    <i data-lucide="${expandIcon}" class="w-4 h-4 opacity-50 folder-toggle"></i>
+                    <i data-lucide="folder" class="w-4 h-4 opacity-70"></i>
+                    <span class="text-sm flex-1">${folder.name}</span>
+                    ${folder.count !== undefined ? `<span class="text-xs opacity-50">${folder.count}</span>` : ''}
+                </div>
+            `;
+            
+            if (hasChildren && folder.expanded) {
+                const childrenContainer = document.createElement('div');
+                folder.children.forEach(child => {
+                    childrenContainer.appendChild(createFolderItem(child, level + 1));
+                });
+                div.appendChild(childrenContainer);
+            }
+            
+            div.addEventListener('click', (e) => {
+                if (e.target.closest('.folder-toggle')) {
+                    folder.expanded = !folder.expanded;
+                    renderFolderTree();
+                    lucide.createIcons();
+                } else {
+                    document.querySelectorAll('#folderTree .sidebar-item').forEach(item => item.classList.remove('active'));
+                    div.classList.add('active');
+                }
+            });
+            
+            return div;
+        }
+
+        // ==================== CATEGORY TREE ====================
+        function renderCategoryTree() {
+            const container = document.getElementById('categoryTree');
+            container.innerHTML = '';
+            
+            categoryData.forEach(cat => {
+                const div = document.createElement('div');
+                div.className = `sidebar-item rounded-md cursor-pointer ${cat.id === activeCategory ? 'active' : ''}`;
+                div.dataset.id = cat.id;
+                
+                div.innerHTML = `
+                    <div class="flex items-center gap-2 py-2 px-2 rounded-md">
+                        <i data-lucide="tag" class="w-4 h-4 opacity-70"></i>
+                        <span class="text-sm flex-1">${cat.name}</span>
+                        <span class="text-xs opacity-50">${cat.count}</span>
+                    </div>
+                `;
+                
+                div.addEventListener('click', () => {
+                    activeCategory = cat.id;
+                    document.querySelectorAll('#categoryTree .sidebar-item').forEach(item => item.classList.remove('active'));
+                    div.classList.add('active');
+                    filterByCategory(cat.id);
+                });
+                
+                container.appendChild(div);
+            });
+        }
+
+        function filterByCategory(categoryId) {
+            let filtered = soundData;
+            
+            if (categoryId === 'tag-short') {
+                filtered = soundData.filter(s => s.duration < 5000);
+            } else if (categoryId === 'tag-medium') {
+                filtered = soundData.filter(s => s.duration >= 5000 && s.duration <= 15000);
+            } else if (categoryId === 'tag-long') {
+                filtered = soundData.filter(s => s.duration > 15000);
+            } else if (categoryId === 'tag-nature') {
+                filtered = soundData.filter(s => s.category === '自然音效');
+            } else if (categoryId === 'tag-mechanical') {
+                filtered = soundData.filter(s => s.category === '机械音效');
+            } else if (categoryId === 'tag-human') {
+                filtered = soundData.filter(s => s.category === '人声动作');
+            } else if (categoryId === 'tag-foley') {
+                filtered = soundData.filter(s => s.category === '拟音');
+            }
+            
+            renderSoundList(document.getElementById('searchInput').value, filtered);
+        }
+
+        // ==================== SOUND LIST ====================
+        function renderSoundList(filter = '', sounds = soundData) {
+            const container = document.getElementById('soundList');
+            container.innerHTML = '';
+            
+            const filteredSounds = sounds.filter(sound => 
+                sound.name.toLowerCase().includes(filter.toLowerCase()) ||
+                sound.tags.some(tag => tag.toLowerCase().includes(filter.toLowerCase()))
+            );
+            
+            filteredSounds.forEach(sound => {
+                const row = document.createElement('div');
+                row.className = `sound-row flex items-center px-4 py-3 border-b cursor-pointer ${selectedSounds.has(sound.id) ? 'selected' : ''}`;
+                row.style.borderColor = 'var(--border-color)';
+                row.dataset.id = sound.id;
+                
+                const isCurrent = currentSound && currentSound.id === sound.id;
+                
+                row.innerHTML = `
+                    <div class="w-10 flex justify-center">
+                        <input type="checkbox" class="w-4 h-4 rounded sound-checkbox" ${selectedSounds.has(sound.id) ? 'checked' : ''}>
+                    </div>
+                    <div class="w-12 flex justify-center">
+                        <div class="w-8 h-8 rounded border flex items-center justify-center" style="border-color: var(--border-color);">
+                            <i data-lucide="music" class="w-4 h-4 opacity-70"></i>
+                        </div>
+                    </div>
+                    <div class="w-32 flex justify-center">
+                        <canvas class="mini-waveform w-28 h-8" data-id="${sound.id}"></canvas>
+                    </div>
+                    <div class="flex-1 min-w-0 flex items-center gap-2">
+                        <span class="text-sm truncate">${sound.name}</span>
+                        ${isCurrent && isPlaying ? `
+                            <div class="playing-indicator">
+                                <span></span><span></span><span></span><span></span>
+                            </div>
+                        ` : ''}
+                    </div>
+                    <div class="w-24 text-right text-sm opacity-70 font-mono">${formatTime(sound.duration)}</div>
+                    <div class="w-16 flex justify-center">
+                        <button class="play-sound-btn w-7 h-7 rounded-full border flex items-center justify-center transition-all hover:scale-110" data-id="${sound.id}"
+                                style="border-color: var(--border-color);">
+                            <i data-lucide="${isCurrent && isPlaying ? 'pause' : 'play'}" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                `;
+                
+                row.addEventListener('click', (e) => {
+                    if (e.target.closest('.sound-checkbox')) {
+                        const checkbox = e.target.closest('.sound-checkbox');
+                        if (checkbox.checked) {
+                            selectedSounds.add(sound.id);
+                        } else {
+                            selectedSounds.delete(sound.id);
+                        }
+                        row.classList.toggle('selected', checkbox.checked);
+                    } else if (e.target.closest('.play-sound-btn')) {
+                        playSound(sound);
+                    } else {
+                        selectSound(sound);
+                    }
+                });
+                
+                container.appendChild(row);
+            });
+            
+            lucide.createIcons();
+            drawMiniWaveforms();
+        }
+
+        function drawMiniWaveforms() {
+            document.querySelectorAll('.mini-waveform').forEach(canvas => {
+                const ctx = canvas.getContext('2d');
+                const width = canvas.width = canvas.offsetWidth;
+                const height = canvas.height = canvas.offsetHeight;
+                const soundId = parseInt(canvas.dataset.id);
+                const sound = soundData.find(s => s.id === soundId);
+                
+                ctx.clearRect(0, 0, width, height);
+                
+                const bars = 30;
+                const barWidth = width / bars;
+                
+                for (let i = 0; i < bars; i++) {
+                    const barHeight = Math.random() * height * 0.8 + height * 0.1;
+                    const x = i * barWidth;
+                    const y = (height - barHeight) / 2;
+                    
+                    ctx.fillStyle = currentSound && currentSound.id === soundId ? 'var(--text-primary)' : 'var(--text-secondary)';
+                    ctx.globalAlpha = currentSound && currentSound.id === soundId ? 1 : 0.5;
+                    ctx.fillRect(x + 1, y, barWidth - 2, barHeight);
+                }
+                ctx.globalAlpha = 1;
+            });
+        }
+
+        function selectSound(sound) {
+            currentSound = sound;
+            playbackProgress = 0;
+            updatePlaybackUI();
+            drawMainWaveform();
+            renderSoundList(document.getElementById('searchInput').value);
+        }
+
+        function playSound(sound) {
+            if (currentSound && currentSound.id === sound.id && isPlaying) {
+                pausePlayback();
+            } else {
+                currentSound = sound;
+                startPlayback();
+            }
+        }
+
+        // ==================== PLAYBACK ====================
+        function startPlayback() {
+            isPlaying = true;
+            updatePlaybackUI();
+            renderSoundList(document.getElementById('searchInput').value);
+            
+            if (playbackInterval) clearInterval(playbackInterval);
+            playbackInterval = setInterval(() => {
+                if (!currentSound) return;
+                
+                playbackProgress += 100;
+                if (playbackProgress >= currentSound.duration) {
+                    if (isLooping) {
+                        playbackProgress = 0;
+                    } else {
+                        playbackProgress = 0;
+                        isPlaying = false;
+                        clearInterval(playbackInterval);
+                    }
+                }
+                updatePlaybackUI();
+            }, 100);
+        }
+
+        function pausePlayback() {
+            isPlaying = false;
+            if (playbackInterval) clearInterval(playbackInterval);
+            updatePlaybackUI();
+            renderSoundList(document.getElementById('searchInput').value);
+        }
+
+        function stopPlayback() {
+            isPlaying = false;
+            playbackProgress = 0;
+            if (playbackInterval) clearInterval(playbackInterval);
+            updatePlaybackUI();
+            renderSoundList(document.getElementById('searchInput').value);
+        }
+
+        function updatePlaybackUI() {
+            const playIcon = document.getElementById('playIcon');
+            const pauseIcon = document.getElementById('pauseIcon');
+            const currentTimeEl = document.getElementById('currentTime');
+            const durationTimeEl = document.getElementById('durationTime');
+            const progressBar = document.getElementById('progressBar');
+            const playhead = document.getElementById('playhead');
+            const totalTimeDisplay = document.getElementById('totalTimeDisplay');
+            
+            if (isPlaying) {
+                playIcon.classList.add('hidden');
+                pauseIcon.classList.remove('hidden');
+            } else {
+                playIcon.classList.remove('hidden');
+                pauseIcon.classList.add('hidden');
+            }
+            
+            if (currentSound) {
+                currentTimeEl.textContent = formatTimeShort(playbackProgress);
+                durationTimeEl.textContent = formatTimeShort(currentSound.duration);
+                totalTimeDisplay.textContent = formatTimeShort(currentSound.duration);
+                
+                const progress = (playbackProgress / currentSound.duration) * 100;
+                progressBar.style.width = `${progress}%`;
+                playhead.style.left = `${progress}%`;
+            } else {
+                currentTimeEl.textContent = '00:00';
+                durationTimeEl.textContent = '00:00';
+                progressBar.style.width = '0%';
+                playhead.style.left = '0%';
+            }
+        }
+
+        // ==================== MAIN WAVEFORM ====================
+        function drawMainWaveform() {
+            const canvas = document.getElementById('mainWaveform');
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width = canvas.offsetWidth;
+            const height = canvas.height = canvas.offsetHeight;
+            
+            ctx.clearRect(0, 0, width, height);
+            
+            if (!currentSound) return;
+            
+            const bars = 100;
+            const barWidth = width / bars;
+            const progress = currentSound ? (playbackProgress / currentSound.duration) : 0;
+            const progressBarIndex = Math.floor(bars * progress);
+            
+            for (let i = 0; i < bars; i++) {
+                const barHeight = Math.random() * (height - 40) * 0.8 + (height - 40) * 0.1;
+                const x = i * barWidth;
+                const y = (height - barHeight) / 2;
+                
+                if (i <= progressBarIndex) {
+                    ctx.fillStyle = 'var(--text-primary)';
+                } else {
+                    ctx.fillStyle = 'var(--text-secondary)';
+                    ctx.globalAlpha = 0.3;
+                }
+                
+                ctx.fillRect(x + 1, y, barWidth - 2, barHeight);
+                ctx.globalAlpha = 1;
+            }
+        }
+
+        // ==================== CHAT ====================
+        function addChatMessage(text, isUser = false) {
+            const container = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'chat-message animate-slide-in';
+            
+            if (isUser) {
+                messageDiv.innerHTML = `
+                    <div class="flex items-start gap-2 justify-end">
+                        <div class="rounded-2xl rounded-tr-sm px-4 py-3 text-sm border max-w-[85%]" style="border-color: var(--border-color);">
+                            ${text}
+                        </div>
+                    </div>
+                `;
+            } else {
+                messageDiv.innerHTML = `
+                    <div class="flex items-start gap-2">
+                        <div class="w-7 h-7 rounded-full border flex items-center justify-center shrink-0" style="border-color: var(--border-color);">
+                            <i data-lucide="bot" class="w-4 h-4"></i>
+                        </div>
+                        <div class="rounded-2xl rounded-tl-sm px-4 py-3 text-sm max-w-[85%]" style="background-color: var(--bg-tertiary);">
+                            ${text}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            container.appendChild(messageDiv);
+            container.scrollTop = container.scrollHeight;
+            lucide.createIcons();
+        }
+
+        function handleChatMessage(text) {
+            addChatMessage(text, true);
+            
+            setTimeout(() => {
+                const lowerText = text.toLowerCase();
+                let response = '';
+                
+                if (lowerText.includes('雨') || lowerText.includes('rain')) {
+                    response = '我找到了以下雨声音效：<br>• rain_light_01.wav (00:15)<br>点击播放按钮即可试听。';
+                    setTimeout(() => {
+                        const rainSound = soundData.find(s => s.name.includes('rain'));
+                        if (rainSound) selectSound(rainSound);
+                    }, 500);
+                } else if (lowerText.includes('雷') || lowerText.includes('thunder')) {
+                    response = '我找到了以下雷声音效：<br>• thunder_deep_02.wav (00:08)<br>这是一个深沉的雷声音效。';
+                } else if (lowerText.includes('恐怖') || lowerText.includes('吓人')) {
+                    response = '推荐以下恐怖氛围音效：<br>• wind_howling_storm.wav (00:25)<br>• thunder_deep_02.wav (00:08)<br>组合使用效果更佳。';
+                } else if (lowerText.includes('自然') || lowerText.includes('nature')) {
+                    response = '自然音效库包含：<br>• rain_light_01.wav - 雨声<br>• thunder_deep_02.wav - 雷声<br>• birds_morning_chorus.wav - 鸟鸣<br>• wind_howling_storm.wav - 风声';
+                } else {
+                    response = '我理解你在寻找音效。请告诉我更具体的需求，比如音效类型（雨声、雷声、脚步声等）或使用场景。';
+                }
+                
+                addChatMessage(response);
+            }, 800);
+        }
+
+        // ==================== SETTINGS ====================
+        function toggleSettings() {
+            const dropdown = document.getElementById('settingsDropdown');
+            dropdown.classList.toggle('hidden');
+            dropdown.classList.toggle('visible');
+        }
+
+        function toggleTheme() {
+            document.documentElement.classList.toggle('dark');
+            drawMiniWaveforms();
+            drawMainWaveform();
+        }
+
+        function updateSetting(type, value) {
+            document.querySelectorAll(`.setting-option[data-type="${type}"]`).forEach(btn => {
+                const isSelected = btn.dataset.value === value;
+                btn.classList.toggle('opacity-50', !isSelected);
+                btn.querySelector('.check-icon').classList.toggle('hidden', !isSelected);
+            });
+        }
+
+        // ==================== EVENT LISTENERS ====================
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialize
+            renderFolderTree();
+            renderCategoryTree();
+            renderSoundList();
+            drawMainWaveform();
+            lucide.createIcons();
+            
+            // Settings
+            document.getElementById('settingsBtn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleSettings();
+            });
+            
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('#settingsDropdown')) {
+                    document.getElementById('settingsDropdown').classList.add('hidden');
+                    document.getElementById('settingsDropdown').classList.remove('visible');
+                }
+            });
+            
+            document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+            
+            document.querySelectorAll('.setting-option').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    updateSetting(btn.dataset.type, btn.dataset.value);
+                });
+            });
+            
+            // Search
+            document.getElementById('searchInput').addEventListener('input', (e) => {
+                renderSoundList(e.target.value);
+            });
+            
+            // Select All
+            document.getElementById('selectAll').addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    soundData.forEach(s => selectedSounds.add(s.id));
+                } else {
+                    selectedSounds.clear();
+                }
+                renderSoundList(document.getElementById('searchInput').value);
+            });
+            
+            // Playback Controls
+            document.getElementById('playPauseBtn').addEventListener('click', () => {
+                if (!currentSound) {
+                    selectSound(soundData[0]);
+                    startPlayback();
+                } else if (isPlaying) {
+                    pausePlayback();
+                } else {
+                    startPlayback();
+                }
+            });
+            
+            document.getElementById('stopBtn').addEventListener('click', stopPlayback);
+            
+            document.getElementById('loopBtn').addEventListener('click', () => {
+                isLooping = !isLooping;
+                document.getElementById('loopBtn').classList.toggle('opacity-50', !isLooping);
+                document.getElementById('loopBtn').classList.toggle('text-primary-500', isLooping);
+            });
+            
+            document.getElementById('prevBtn').addEventListener('click', () => {
+                if (!currentSound) return;
+                const currentIndex = soundData.findIndex(s => s.id === currentSound.id);
+                const prevIndex = currentIndex > 0 ? currentIndex - 1 : soundData.length - 1;
+                selectSound(soundData[prevIndex]);
+                startPlayback();
+            });
+            
+            document.getElementById('nextBtn').addEventListener('click', () => {
+                if (!currentSound) return;
+                const currentIndex = soundData.findIndex(s => s.id === currentSound.id);
+                const nextIndex = currentIndex < soundData.length - 1 ? currentIndex + 1 : 0;
+                selectSound(soundData[nextIndex]);
+                startPlayback();
+            });
+            
+            // Progress Bar
+            document.getElementById('progressContainer').addEventListener('click', (e) => {
+                if (!currentSound) return;
+                const rect = e.currentTarget.getBoundingClientRect();
+                const progress = (e.clientX - rect.left) / rect.width;
+                playbackProgress = Math.floor(progress * currentSound.duration);
+                updatePlaybackUI();
+                drawMainWaveform();
+            });
+            
+            // Volume
+            const volumeSlider = document.getElementById('volumeSlider');
+            volumeSlider.addEventListener('input', (e) => {
+                currentVolume = e.target.value;
+                document.getElementById('volumeValue').textContent = `${currentVolume}%`;
+                volumeSlider.style.background = `linear-gradient(to right, var(--text-primary) ${currentVolume}%, var(--border-color) ${currentVolume}%)`;
+                
+                if (currentVolume > 0 && isMuted) {
+                    isMuted = false;
+                    document.getElementById('volumeIcon').setAttribute('data-lucide', 'volume-2');
+                    lucide.createIcons();
+                }
+            });
+            
+            document.getElementById('muteBtn').addEventListener('click', () => {
+                isMuted = !isMuted;
+                const icon = isMuted ? 'volume-x' : (currentVolume == 0 ? 'volume' : 'volume-2');
+                document.getElementById('volumeIcon').setAttribute('data-lucide', icon);
+                lucide.createIcons();
+            });
+            
+            // Chat
+            document.getElementById('sendMessage').addEventListener('click', () => {
+                const input = document.getElementById('chatInput');
+                const text = input.value.trim();
+                if (text) {
+                    handleChatMessage(text);
+                    input.value = '';
+                }
+            });
+            
+            document.getElementById('chatInput').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    document.getElementById('sendMessage').click();
+                }
+            });
+            
+            document.querySelectorAll('.example-prompt').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const text = btn.textContent.replace(/"/g, '');
+                    handleChatMessage(text);
+                });
+            });
+            
+            // Waveform click
+            document.getElementById('mainWaveform').addEventListener('click', (e) => {
+                if (!currentSound) return;
+                const rect = e.target.getBoundingClientRect();
+                const progress = (e.clientX - rect.left) / rect.width;
+                playbackProgress = Math.floor(progress * currentSound.duration);
+                updatePlaybackUI();
+                drawMainWaveform();
+            });
+            
+            // Animation loop for waveform
+            setInterval(() => {
+                if (isPlaying && currentSound) {
+                    drawMainWaveform();
+                }
+            }, 100);
+        });
+    </script>
+</body>
+</html>
