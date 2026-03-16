@@ -1089,25 +1089,9 @@
                 console.log('window.electronAPI.fileImport:', window.electronAPI?.fileImport);
                 
                 try {
-                    if (window.electronAPI && window.electronAPI.fileImport) {
-                        console.log('调用 fileImport.selectAudioFiles...');
-                        const result = await window.electronAPI.fileImport.selectAudioFiles({
-                            title: '选择音频文件',
-                            filters: [
-                                { name: '音频文件', extensions: ['wav', 'mp3', 'aac', 'flac', 'ogg', 'm4a'] },
-                                { name: '所有文件', extensions: ['*'] }
-                            ]
-                        });
-                        console.log('选择结果:', result);
-
-                        if (result.success && result.files) {
-                            await handleImportedFiles(result.files);
-                        } else if (!result.canceled) {
-                            console.error('文件选择失败:', result.error);
-                            showNotification('选择文件失败', 'error');
-                        }
-                    } else {
-                        // 浏览器环境
+                    if (!window.electronAPI) {
+                        console.warn('window.electronAPI 不存在，使用浏览器原生选择');
+                        // 浏览器环境 - 使用原生文件选择
                         const input = document.createElement('input');
                         input.type = 'file';
                         input.accept = '.wav,.mp3,.aac,.flac,.ogg,.m4a';
@@ -1117,6 +1101,32 @@
                             handleBrowserFiles(files);
                         };
                         input.click();
+                        return;
+                    }
+                    
+                    if (!window.electronAPI.fileImport) {
+                        console.warn('window.electronAPI.fileImport 不存在');
+                        showNotification('文件导入 API 不可用', 'error');
+                        return;
+                    }
+                    
+                    console.log('调用 fileImport.selectAudioFiles...');
+                    const result = await window.electronAPI.fileImport.selectAudioFiles({
+                        title: '选择音频文件',
+                        filters: [
+                            { name: '音频文件', extensions: ['wav', 'mp3', 'aac', 'flac', 'ogg', 'm4a'] },
+                            { name: '所有文件', extensions: ['*'] }
+                        ]
+                    });
+                    console.log('选择结果:', result);
+
+                    if (result.success && result.files) {
+                        await handleImportedFiles(result.files);
+                    } else if (result.canceled) {
+                        console.log('用户取消了文件选择');
+                    } else {
+                        console.error('文件选择失败:', result.error);
+                        showNotification('选择文件失败: ' + (result.error || '未知错误'), 'error');
                     }
                 } catch (error) {
                     console.error('导入文件时出错:', error);
