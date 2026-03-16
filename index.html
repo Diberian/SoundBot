@@ -459,6 +459,14 @@
                 isPlaying = true;
                 updatePlaybackUI();
                 renderSoundList(document.getElementById('searchInput').value);
+                
+                // 获取波形数据
+                fetchWaveformData(audioSrc).then(waveform => {
+                    if (waveform) {
+                        sound.waveform = waveform;
+                        drawMainWaveform();
+                    }
+                });
             } catch (error) {
                 console.error('播放失败:', error);
                 // 使用 alert 作为后备通知方式
@@ -632,8 +640,30 @@
                 row.className = `sound-row flex items-center px-4 py-3 border-b cursor-pointer ${selectedSounds.has(sound.id) ? 'selected' : ''}`;
                 row.style.borderColor = 'var(--border-color)';
                 row.dataset.id = sound.id;
+                row.draggable = true;
                 
                 const isCurrent = currentSound && currentSound.id === sound.id;
+                
+                // 拖拽事件
+                row.addEventListener('dragstart', (e) => {
+                    e.dataTransfer.setData('text/plain', sound.filePath || '');
+                    e.dataTransfer.setData('text/uri-list', sound.filePath ? 'file://' + sound.filePath : '');
+                    e.dataTransfer.effectAllowed = 'copy';
+                    
+                    // 如果有 filePath，设置为拖拽的文件
+                    if (sound.filePath) {
+                        // 尝试设置文件
+                        try {
+                            e.dataTransfer.setData('application/x-moz-file', sound.filePath);
+                        } catch (err) {}
+                    }
+                    
+                    row.style.opacity = '0.5';
+                });
+                
+                row.addEventListener('dragend', () => {
+                    row.style.opacity = '1';
+                });
                 
                 row.innerHTML = `
                     <div class="w-10 flex justify-center">
@@ -802,6 +832,47 @@
             }
         }
 
+        // ==================== WAVEFORM DATA ====================
+        let audioContext = null;
+        
+        function getAudioContext() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            return audioContext;
+        }
+        
+        // 获取音频波形数据
+        async function fetchWaveformData(audioSrc) {
+            try {
+                const ctx = getAudioContext();
+                const response = await fetch(audioSrc);
+                const arrayBuffer = await response.arrayBuffer();
+                const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+                
+                // 获取音频数据
+                const rawData = audioBuffer.getChannelData(0);
+                const samples = 100; // 采样点数
+                const blockSize = Math.floor(rawData.length / samples);
+                const waveform = [];
+                
+                for (let i = 0; i < samples; i++) {
+                    let sum = 0;
+                    for (let j = 0; j < blockSize; j++) {
+                        sum += Math.abs(rawData[i * blockSize + j]);
+                    }
+                    waveform.push(sum / blockSize);
+                }
+                
+                // 归一化
+                const max = Math.max(...waveform);
+                return waveform.map(v => v / max);
+            } catch (error) {
+                console.error('获取波形数据失败:', error);
+                return null;
+            }
+        }
+        
         // ==================== MAIN WAVEFORM ====================
         function drawMainWaveform() {
             const canvas = document.getElementById('mainWaveform');
@@ -818,8 +889,15 @@
             const progress = currentSound ? (playbackProgress / currentSound.duration) : 0;
             const progressBarIndex = Math.floor(bars * progress);
             
+            const waveformData = currentSound.waveform || null;
+            
             for (let i = 0; i < bars; i++) {
-                const barHeight = Math.random() * (height - 40) * 0.8 + (height - 40) * 0.1;
+                let barHeight;
+                if (waveformData && waveformData[i] !== undefined) {
+                    barHeight = waveformData[i] * (height - 40) * 0.9 + (height - 40) * 0.05;
+                } else {
+                    barHeight = Math.random() * (height - 40) * 0.8 + (height - 40) * 0.1;
+                }
                 const x = i * barWidth;
                 const y = (height - barHeight) / 2;
                 
