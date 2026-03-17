@@ -331,6 +331,12 @@ function setupIpcHandlers() {
           return await stopBackendServer();
         }
 
+        case 'waveform': {
+          // 获取音频波形数据
+          const response = await fetch(`http://127.0.0.1:${BACKEND_PORT}/api/waveform?path=${encodeURIComponent(data)}`);
+          return await response.json();
+        }
+
         default:
           return { success: false, error: '未知操作' };
       }

@@ -839,8 +839,41 @@
             currentSound = sound;
             playbackProgress = 0;
             updatePlaybackUI();
-            drawMainWaveform();
+            
+            // 加载真实波形数据
+            loadWaveformForSound(sound);
+            
             renderSoundList(document.getElementById('searchInput').value);
+        }
+
+        // 从后端加载波形数据
+        async function loadWaveformForSound(sound) {
+            if (!sound || !sound.filePath) {
+                drawMainWaveform();
+                return;
+            }
+            
+            try {
+                // 优先使用后端 API 获取波形数据
+                if (window.electronAPI && window.electronAPI.backendAPI && window.electronAPI.backendAPI.getWaveform) {
+                    const waveformData = await window.electronAPI.backendAPI.getWaveform(sound.filePath);
+                    if (waveformData && waveformData.peaks && waveformData.peaks.length > 0) {
+                        sound.waveform = waveformData.peaks;
+                        sound.waveformDuration = waveformData.duration;
+                        sound.waveformSampleRate = waveformData.sample_rate;
+                        sound.waveformChannels = waveformData.channels;
+                        console.log('[Waveform] 成功加载波形数据:', waveformData.peaks.length, '个点');
+                    } else {
+                        console.warn('[Waveform] 后端返回数据格式不正确');
+                        sound.waveform = null;
+                    }
+                }
+            } catch (error) {
+                console.warn('[Waveform] 加载波形数据失败:', error);
+                sound.waveform = null;
+            }
+            
+            drawMainWaveform();
         }
 
         function playSound(sound) {

@@ -134,7 +134,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     startServer: () => ipcRenderer.invoke('backend-api', 'start-server'),
 
     // 停止后端服务
-    stopServer: () => ipcRenderer.invoke('backend-api', 'stop-server')
+    stopServer: () => ipcRenderer.invoke('backend-api', 'stop-server'),
+
+    // 获取音频波形数据
+    getWaveform: (filePath) => ipcRenderer.invoke('backend-api', 'waveform', filePath)
   }
 });
 
