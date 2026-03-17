@@ -2323,43 +2323,37 @@
                 if (!currentSound) return;
                 e.preventDefault();
 
-                const canvas = document.getElementById('mainWaveform');
                 const waveContainer = document.getElementById('waveformContainer');
-                
-                // 使用 waveContainer.offsetWidth（与绘制函数一致）
-                const canvasWidth = waveContainer.offsetWidth;
-
-                // 获取鼠标相对于容器的位置
                 const containerRect = waveContainer.getBoundingClientRect();
+                
+                const canvasWidth = waveContainer.offsetWidth;
+                
+                // 鼠标在内容中的相对位置 (0-1)，考虑当前滚动
                 const mouseX = e.clientX - containerRect.left;
-                const mouseProgress = Math.max(0, Math.min(1, mouseX / canvasWidth));
-
-                // 保存缩放前的状态
-                const oldZoom = waveformZoomLevel;
-                const oldTotalWidth = canvasWidth * oldZoom;
+                const oldTotalWidth = canvasWidth * waveformZoomLevel;
+                const mouseContentRatio = (mouseX + waveformScrollOffset) / oldTotalWidth;
 
                 // 计算缩放
                 const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-                const newZoom = Math.max(WAVEFORM_MIN_ZOOM, Math.min(WAVEFORM_MAX_ZOOM, oldZoom * zoomFactor));
+                const newZoom = Math.max(WAVEFORM_MIN_ZOOM, Math.min(WAVEFORM_MAX_ZOOM, waveformZoomLevel * zoomFactor));
 
-                // 如果缩放比例变化很小，跳过重绘
-                if (Math.abs(newZoom - oldZoom) < 0.001) return;
-
-                // 计算鼠标在缩放前波形上的绝对位置
-                const mouseAbsPos = (mouseProgress * oldTotalWidth) + waveformScrollOffset;
-
-                waveformZoomLevel = newZoom;
+                // 如果缩放比例变化很小，跳过
+                if (Math.abs(newZoom - waveformZoomLevel) < 0.001) return;
 
                 // 计算缩放后波形的总宽度
                 const newTotalWidth = canvasWidth * newZoom;
-                const maxScroll = Math.max(0, newTotalWidth - canvasWidth);
-
-                // 缩放后，保持鼠标下的波形位置不变
-                // 新的 scrollOffset = 鼠标绝对位置 - 鼠标在画布上的位置
-                let newScrollOffset = mouseAbsPos - (mouseProgress * canvasWidth);
-
+                
+                // 缩放后，鼠标应该指向内容的相同位置
+                // 新位置 = 新内容宽度 * 鼠标相对位置
+                // 滚动偏移 = 新位置 - 鼠标在画布上的位置
+                let newScrollOffset = (mouseContentRatio * newTotalWidth) - mouseX;
+                
                 // 限制滚动范围
+                const maxScroll = Math.max(0, newTotalWidth - canvasWidth);
                 waveformScrollOffset = Math.max(0, Math.min(maxScroll, newScrollOffset));
+                
+                // 应用新缩放
+                waveformZoomLevel = newZoom;
 
                 // 更新缩放显示
                 updateZoomDisplay();
