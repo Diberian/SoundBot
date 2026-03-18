@@ -293,9 +293,9 @@
             </div>
 
             <!-- 拖拽手柄（选区拖拽导出） -->
-            <div id="dragHandle" class="absolute top-0 h-8 z-20 cursor-grab hidden" style="min-width: 60px; background: linear-gradient(to bottom, rgba(59, 130, 246, 0.3), transparent);">
+            <div id="dragHandle" class="absolute top-0 h-6 z-20 cursor-grab hidden" style="min-width: 40px; background: linear-gradient(to bottom, rgba(59, 130, 246, 0.5), rgba(59, 130, 246, 0.2)); border-bottom: 2px solid rgba(59, 130, 246, 0.8);">
                 <div class="flex items-center justify-center h-full">
-                    <span id="dragHandleText" class="text-xs text-blue-400 opacity-80 whitespace-nowrap">拖拽导出</span>
+                    <span id="dragHandleText" class="text-xs text-white font-medium whitespace-nowrap">拖拽导出</span>
                 </div>
             </div>
 
@@ -480,7 +480,26 @@
             function update() {
                 if (audioPlayer && currentSound && isPlaying) {
                     // 直接从 audioPlayer 获取当前时间，确保毫秒级精度
-                    playbackProgress = Math.round(audioPlayer.currentTime * 1000);
+                    const currentTime = audioPlayer.currentTime;
+                    playbackProgress = Math.round(currentTime * 1000);
+                    
+                    // 检查是否播放到选区结束位置
+                    if (selectionStart !== null && selectionEnd !== null) {
+                        const selEnd = selectionEnd / 1000; // 转换为秒
+                        
+                        // 如果播放到选区结束位置，立即停止播放
+                        // 使用更精确的检测，确保播放到选区结束位置
+                        if (currentTime >= selEnd) {
+                            isPlaying = false;
+                            pausePlayback();
+                            // 移除ended监听器
+                            if (audioPlayer) {
+                                audioPlayer.removeEventListener('ended', handlePlaybackEnded);
+                            }
+                            return;
+                        }
+                    }
+                    
                     updatePlaybackUI();
                     drawMainWaveform();
                     animationFrameId = requestAnimationFrame(update);
@@ -2291,8 +2310,10 @@
 
                 // 检查是否是拖拽（按住左键移动超过阈值）
                 if (e.buttons === 1) {  // 左键按住
-                    // 如果鼠标在dragHandle区域按下，不处理选区
+                    // 根据需求，鼠标移动到dragHandle区域时选区操作不中断
+                    // 只有当鼠标确实在dragHandle区域内按下时才不处理选区
                     if (mouseStartedInDragHandle) {
+                        // 完全移除对当前鼠标位置的检查，确保选区操作不会被中断
                         return;
                     }
 
@@ -2427,7 +2448,7 @@
                             visibleLeft = Math.max(0, visibleLeft);
                             visibleRight = Math.min(containerWidth, visibleRight);
 
-                            const handleWidth = Math.max(20, visibleRight - visibleLeft); // 最小20px
+                            const handleWidth = Math.max(10, visibleRight - visibleLeft); // 最小10px，更细窄
 
                             dragHandle.style.left = visibleLeft + 'px';
                             dragHandle.style.width = handleWidth + 'px';
@@ -2436,7 +2457,7 @@
                             // 选区太窄时隐藏文字
                             const dragHandleText = document.getElementById('dragHandleText');
                             if (dragHandleText) {
-                                dragHandleText.style.display = handleWidth < 60 ? 'none' : 'inline';
+                                dragHandleText.style.display = handleWidth < 40 ? 'none' : 'inline';
                             }
                         }
 
@@ -2783,7 +2804,24 @@
 
             // 播放到结束停止的处理函数
             function handlePlaybackEnded() {
-                // 播放完毕，停止并更新UI
+                // 检查是否播放到选区结束位置
+                if (selectionStart !== null && selectionEnd !== null && audioPlayer) {
+                    const currentTime = audioPlayer.currentTime;
+                    const selEnd = selectionEnd / 1000; // 转换为秒
+                    
+                    // 如果播放到选区结束位置，立即停止播放
+                    if (Math.abs(currentTime - selEnd) < 0.1) { // 允许0.1秒的误差
+                        isPlaying = false;
+                        pausePlayback();
+                        // 移除ended监听器
+                        if (audioPlayer) {
+                            audioPlayer.removeEventListener('ended', handlePlaybackEnded);
+                        }
+                        return;
+                    }
+                }
+                
+                // 正常播放结束处理
                 isPlaying = false;
                 pausePlayback();
                 // 移除ended监听器
