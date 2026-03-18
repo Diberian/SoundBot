@@ -2484,86 +2484,6 @@
                 });
             }
 
-            // 保留 canvas 的拖拽事件（向后兼容）
-            waveformCanvas.addEventListener('dragstart', async (e) => {
-                if (!currentSound || selectionStart === null || selectionEnd === null) {
-                    e.preventDefault();
-                    return;
-                }
-
-                // 检查拖拽起始位置是否在选区内
-                const rect = waveformCanvas.getBoundingClientRect();
-                const dragX = e.clientX - rect.left + waveformScrollOffset;
-                const selStartX = (selectionStart / currentSound.duration) * (waveformCanvas.width * waveformZoomLevel);
-                const selEndX = (selectionEnd / currentSound.duration) * (waveformCanvas.width * waveformZoomLevel);
-
-                if (dragX >= selStartX && dragX <= selEndX) {
-                    isDraggingSelection = true;
-
-                    // 调用后端API创建临时裁剪文件
-                    try {
-                        const response = await fetch('/api/export/clip', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                path: currentSound.path || currentSound.filePath,
-                                start: selectionStart / 1000,  // 转换为秒
-                                end: selectionEnd / 1000,        // 转换为秒
-                                temp_file: true
-                            })
-                        });
-
-                        if (response.ok) {
-                            const result = await response.json();
-                            draggedClipPath = result.output_path;
-
-                            // 使用Windows兼容的file协议格式
-                            const filePath = draggedClipPath.replace(/\\/g, '/');
-                            e.dataTransfer.setData('text/uri-list', 'file:///' + filePath);
-                            e.dataTransfer.setData('text/plain', 'file:///' + filePath);
-
-                            // 设置 JSON 数据
-                            e.dataTransfer.setData('application/json', JSON.stringify({
-                                path: currentSound.path || currentSound.filePath,
-                                start: selectionStart,
-                                end: selectionEnd,
-                                outputPath: draggedClipPath
-                            }));
-                            e.dataTransfer.effectAllowed = 'copy';
-
-                            // 设置拖拽图像
-                            e.dataTransfer.setDragImage(waveformCanvas, e.offsetX, e.offsetY);
-                        } else {
-                            console.error('裁剪失败:', await response.text());
-                            e.preventDefault();
-                        }
-                    } catch (error) {
-                        console.error('裁剪请求失败:', error);
-                        e.preventDefault();
-                    }
-                } else {
-                    e.preventDefault();
-                }
-            });
-
-            waveformCanvas.addEventListener('dragend', async (e) => {
-                isDraggingSelection = false;
-
-                // 删除临时文件
-                if (draggedClipPath) {
-                    try {
-                        const encodedPath = encodeURIComponent(draggedClipPath);
-                        await fetch(`/api/temp/${encodedPath}`, {
-                            method: 'DELETE'
-                        });
-                        console.log('已删除临时文件:', draggedClipPath);
-                    } catch (error) {
-                        console.error('删除临时文件失败:', error);
-                    }
-                    draggedClipPath = null;
-                }
-            });
-
             // ==================== 波形滚轮缩放 ====================
             document.getElementById('waveformContainer').addEventListener('wheel', (e) => {
                 if (!currentSound) return;
@@ -2753,43 +2673,74 @@
                     e.preventDefault();
 
                     if (isPlaying) {
+                        // 正在播放 -> 暂停
                         pausePlayback();
                     } else {
-                        // 如果有选区，播放选区并循环
-                        const hasSelection = selectionStart !== null && selectionEnd !== null && currentSound;
+                        // 暂停中 -> 继续播放
+                        if (audioPlayer && audioPlayer.src) {
+                            // 有选区时智能判断播放范围
+                            if (selectionStart !== null && selectionEnd !== null && currentSound) {
+                                const currentTime = audioPlayer.currentTime; // 秒
+                                const selStart = selectionStart / 1000;     // 转换为秒
+                                const selEnd = selectionEnd / 1000;         // 转换为秒
 
-                        if (hasSelection && audioPlayer) {
-                            // 先暂停（如果有）
-                            audioPlayer.pause();
-                            // 设置播放起始位置为选区开始（转换为秒）
-                            audioPlayer.currentTime = selectionStart / 1000;
-                            // 移除之前的时间更新监听器，避免重复
-                            audioPlayer.removeEventListener('timeupdate', handleSelectionLoop);
-                            // 添加循环播放监听器
-                            audioPlayer.addEventListener('timeupdate', handleSelectionLoop);
+                                let playStart = currentTime;
+                                let playEnd = audioPlayer.duration || currentSound.duration / 1000;
 
-                            // 开始播放
-                            audioPlayer.play().then(() => {
-                                isPlaying = true;
-                                startPlaybackAnimation();
-                                updatePlaybackUI();
-                            }).catch(err => {
-                                console.error('播放选区失败:', err);
-                                // 如果播放失败，尝试从头开始
+                                // 智能判断播放范围
+                                if (currentTime >= selStart && currentTime <= selEnd) {
+                                    // 光标在选区内 -> 播放到选区结束停止
+                                    playStart = currentTime;
+                                    playEnd = selEnd;
+                                } else if (currentTime < selStart) {
+                                    // 光标在选区前 -> 播放到选区结束
+                                    playStart = currentTime;
+                                    playEnd = selEnd;
+                                } else {
+                                    // 光标在选区后 -> 播放到音频结尾
+                                    playStart = currentTime;
+                                    playEnd = audioPlayer.duration || currentSound.duration / 1000;
+                                }
+
+                                // 设置播放范围
+                                audioPlayer.currentTime = playStart;
+
+                                // 移除之前的ended监听器
+                                audioPlayer.removeEventListener('ended', handlePlaybackEnded);
+                                // 添加ended监听器，播放到终点后停止
+                                audioPlayer.addEventListener('ended', handlePlaybackEnded);
+
+                                // 开始播放
+                                audioPlayer.play().then(() => {
+                                    isPlaying = true;
+                                    startPlaybackAnimation();
+                                    updatePlaybackUI();
+                                }).catch(err => {
+                                    console.error('播放失败:', err);
+                                    startPlayback();
+                                });
+                            } else {
+                                // 无选区，正常播放
                                 startPlayback();
-                            });
+                            }
                         } else {
-                            startPlayback();
+                            // 没有音频源，重新加载
+                            if (currentSound) {
+                                loadAndPlaySound(currentSound);
+                            }
                         }
                     }
                 }
             });
 
-            // 选区循环播放处理函数
-            function handleSelectionLoop() {
-                if (selectionStart !== null && selectionEnd !== null &&
-                    audioPlayer.currentTime >= selectionEnd / 1000) {
-                    audioPlayer.currentTime = selectionStart / 1000;
+            // 播放到结束停止的处理函数
+            function handlePlaybackEnded() {
+                // 播放完毕，停止并更新UI
+                isPlaying = false;
+                pausePlayback();
+                // 移除ended监听器
+                if (audioPlayer) {
+                    audioPlayer.removeEventListener('ended', handlePlaybackEnded);
                 }
             }
             
