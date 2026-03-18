@@ -1423,6 +1423,13 @@
             
             updatePlaybackUI();
             
+            // 清除拖拽框
+            const dragHandle = document.getElementById('dragHandle');
+            if (dragHandle) {
+                dragHandle.classList.add('hidden');
+                dragHandle.setAttribute('draggable', 'false');
+            }
+            
             // 只使用 Canvas 波形 + /api/waveform 数据，避免 WaveSurfer 内部错误导致黑屏
             loadWaveformForSound(sound);
             
