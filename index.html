@@ -898,6 +898,7 @@
 
                 // 设置音频源
                 audioPlayer.src = audioSrc;
+                audioPlayer.load();  // 强制加载新音频，确保切换音频时正确加载
                 audioPlayer.volume = currentVolume / 100;
                 audioPlayer.muted = isMuted;
                 audioPlayer.loop = isLooping;
@@ -2233,18 +2234,18 @@
                         const selStart = selectionStart / 1000;     // 毫秒转秒
                         const selEnd = selectionEnd / 1000;         // 毫秒转秒
 
-                        let playStart = currentTime;
-                        let playEnd = currentSound.duration / 1000; // 使用currentSound.duration
+                        let playStart;
+                        let playEnd;
 
                         // 智能判断播放范围 - 专业音频软件逻辑
                         if (currentTime >= selStart && currentTime <= selEnd) {
-                            // 光标在选区内 -> 从当前位置播放到选区结束
-                            playStart = currentTime;
+                            // 光标在选区内 -> 从选区开始播放到选区结束（始终从选区开头开始）
+                            playStart = selStart;
                             playEnd = selEnd;
                             playbackStartedInSelection = true;  // 记录播放上下文
                         } else if (currentTime < selStart) {
-                            // 光标在选区前 -> 从选区开始播放到选区结束
-                            playStart = selStart;
+                            // 光标在选区前 -> 从光标位置播放到选区结束
+                            playStart = currentTime;
                             playEnd = selEnd;
                             playbackStartedInSelection = true;  // 记录播放上下文
                         } else {
@@ -2788,18 +2789,18 @@
                                 const selStart = selectionStart / 1000;     // 转换为秒
                                 const selEnd = selectionEnd / 1000;         // 转换为秒
 
-                                let playStart = currentTime;
-                                let playEnd = currentSound.duration / 1000; // 使用currentSound.duration
+                                let playStart;
+                                let playEnd;
 
                                 // 智能判断播放范围 - 专业音频软件逻辑
                                 if (currentTime >= selStart && currentTime <= selEnd) {
-                                    // 光标在选区内 -> 从当前位置播放到选区结束
-                                    playStart = currentTime;
+                                    // 光标在选区内 -> 从选区开始播放到选区结束（始终从选区开头开始）
+                                    playStart = selStart;
                                     playEnd = selEnd;
                                     playbackStartedInSelection = true;  // 记录播放上下文
                                 } else if (currentTime < selStart) {
-                                    // 光标在选区前 -> 从选区开始播放到选区结束
-                                    playStart = selStart;
+                                    // 光标在选区前 -> 从光标位置播放到选区结束
+                                    playStart = currentTime;
                                     playEnd = selEnd;
                                     playbackStartedInSelection = true;  // 记录播放上下文
                                 } else {
