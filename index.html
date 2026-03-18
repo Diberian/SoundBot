@@ -408,6 +408,7 @@
         // 播放上下文跟踪（用于智能选区播放）
         let playbackStartedInSelection = false;  // 播放开始时光标是否在选区内或选区前
         let playbackStartTime = 0;               // 播放开始时的时间（秒）
+        let lastStoppedAtSelectionEnd = false;   // 上一次播放是否因为到达选区结束而停止
 
         // ==================== WAVEFORM ZOOM STATE ====================
         let waveformZoomLevel = 1.0;           // 当前缩放级别 (1.0 = 100%)
@@ -496,6 +497,7 @@
                         // 只有播放开始时光标在选区内或选区前时，才在选区结束位置停止
                         if (currentTime >= selEnd) {
                             isPlaying = false;
+                            lastStoppedAtSelectionEnd = true;  // 标记播放因到达选区结束而停止
                             pausePlayback();
                             // 移除ended监听器
                             if (audioPlayer) {
@@ -896,6 +898,9 @@
                     console.log('[Frontend] 播放音频（后备）:', audioSrc);
                 }
 
+                // 先暂停当前播放的音频
+                audioPlayer.pause();
+                
                 // 设置音频源
                 audioPlayer.src = audioSrc;
                 audioPlayer.load();  // 强制加载新音频，确保切换音频时正确加载
@@ -2237,22 +2242,32 @@
                         let playStart;
                         let playEnd;
 
-                        // 智能判断播放范围 - 专业音频软件逻辑
-                        if (currentTime >= selStart && currentTime <= selEnd) {
-                            // 光标在选区内 -> 从选区开始播放到选区结束（始终从选区开头开始）
+                        // 如果上一次播放因为到达选区结束而停止，且当前光标在选区内，重新从选区开始播放
+                        if (lastStoppedAtSelectionEnd && currentTime >= selStart && currentTime <= selEnd) {
                             playStart = selStart;
                             playEnd = selEnd;
-                            playbackStartedInSelection = true;  // 记录播放上下文
-                        } else if (currentTime < selStart) {
-                            // 光标在选区前 -> 从光标位置播放到选区结束
-                            playStart = currentTime;
-                            playEnd = selEnd;
-                            playbackStartedInSelection = true;  // 记录播放上下文
+                            playbackStartedInSelection = true;
+                            lastStoppedAtSelectionEnd = false;  // 重置标记
                         } else {
-                            // 光标在选区后 -> 从光标位置播放到音频结尾
-                            playStart = currentTime;
-                            playEnd = currentSound.duration / 1000;
-                            playbackStartedInSelection = false;  // 记录播放上下文
+                            // 智能判断播放范围 - 专业音频软件逻辑
+                            if (currentTime >= selStart && currentTime <= selEnd) {
+                                // 光标在选区内 -> 从选区开始播放到选区结束（始终从选区开头开始）
+                                playStart = selStart;
+                                playEnd = selEnd;
+                                playbackStartedInSelection = true;
+                            } else if (currentTime < selStart) {
+                                // 光标在选区前 -> 从光标位置播放到选区结束
+                                playStart = currentTime;
+                                playEnd = selEnd;
+                                playbackStartedInSelection = true;
+                                lastStoppedAtSelectionEnd = false;  // 重置标记
+                            } else {
+                                // 光标在选区后 -> 从光标位置播放到音频结尾
+                                playStart = currentTime;
+                                playEnd = currentSound.duration / 1000;
+                                playbackStartedInSelection = false;
+                                lastStoppedAtSelectionEnd = false;  // 重置标记
+                            }
                         }
                         
                         playbackStartTime = playStart;  // 记录播放开始时间
@@ -2792,22 +2807,32 @@
                                 let playStart;
                                 let playEnd;
 
-                                // 智能判断播放范围 - 专业音频软件逻辑
-                                if (currentTime >= selStart && currentTime <= selEnd) {
-                                    // 光标在选区内 -> 从选区开始播放到选区结束（始终从选区开头开始）
+                                // 如果上一次播放因为到达选区结束而停止，且当前光标在选区内，重新从选区开始播放
+                                if (lastStoppedAtSelectionEnd && currentTime >= selStart && currentTime <= selEnd) {
                                     playStart = selStart;
                                     playEnd = selEnd;
-                                    playbackStartedInSelection = true;  // 记录播放上下文
-                                } else if (currentTime < selStart) {
-                                    // 光标在选区前 -> 从光标位置播放到选区结束
-                                    playStart = currentTime;
-                                    playEnd = selEnd;
-                                    playbackStartedInSelection = true;  // 记录播放上下文
+                                    playbackStartedInSelection = true;
+                                    lastStoppedAtSelectionEnd = false;  // 重置标记
                                 } else {
-                                    // 光标在选区后 -> 从光标位置播放到音频结尾
-                                    playStart = currentTime;
-                                    playEnd = currentSound.duration / 1000;
-                                    playbackStartedInSelection = false;  // 记录播放上下文
+                                    // 智能判断播放范围 - 专业音频软件逻辑
+                                    if (currentTime >= selStart && currentTime <= selEnd) {
+                                        // 光标在选区内 -> 从选区开始播放到选区结束（始终从选区开头开始）
+                                        playStart = selStart;
+                                        playEnd = selEnd;
+                                        playbackStartedInSelection = true;
+                                    } else if (currentTime < selStart) {
+                                        // 光标在选区前 -> 从光标位置播放到选区结束
+                                        playStart = currentTime;
+                                        playEnd = selEnd;
+                                        playbackStartedInSelection = true;
+                                        lastStoppedAtSelectionEnd = false;  // 重置标记
+                                    } else {
+                                        // 光标在选区后 -> 从光标位置播放到音频结尾
+                                        playStart = currentTime;
+                                        playEnd = currentSound.duration / 1000;
+                                        playbackStartedInSelection = false;
+                                        lastStoppedAtSelectionEnd = false;  // 重置标记
+                                    }
                                 }
                                 
                                 playbackStartTime = playStart;  // 记录播放开始时间
