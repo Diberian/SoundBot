@@ -483,21 +483,29 @@
                     const currentTime = audioPlayer.currentTime;
                     playbackProgress = Math.round(currentTime * 1000);
                     
-                    // 检查是否播放到选区结束位置
+                    // 检查是否播放到选区结束位置（只在播放开始时光标在选区内时才检查）
+                    // 如果播放开始时光标在选区后，应该播放到音频结尾，而不是选区结束
                     if (selectionStart !== null && selectionEnd !== null) {
-                        const selEnd = selectionEnd / 1000; // 转换为秒
+                        const selStart = selectionStart / 1000; // 转换为秒
+                        const selEnd = selectionEnd / 1000;     // 转换为秒
                         
-                        // 如果播放到选区结束位置，立即停止播放
-                        // 使用更精确的检测，确保播放到选区结束位置
-                        if (currentTime >= selEnd) {
-                            isPlaying = false;
-                            pausePlayback();
-                            // 移除ended监听器
-                            if (audioPlayer) {
-                                audioPlayer.removeEventListener('ended', handlePlaybackEnded);
+                        // 检查播放开始时光标是否在选区内或选区前
+                        // 如果是，则在选区结束位置停止播放
+                        // 如果播放开始时光标在选区后，则应该播放到音频结尾
+                        const playbackStartTime = audioPlayer.currentTime;
+                        if (playbackStartTime >= selStart && playbackStartTime <= selEnd) {
+                            // 播放开始时光标在选区内或选区前 -> 在选区结束位置停止
+                            if (currentTime >= selEnd) {
+                                isPlaying = false;
+                                pausePlayback();
+                                // 移除ended监听器
+                                if (audioPlayer) {
+                                    audioPlayer.removeEventListener('ended', handlePlaybackEnded);
+                                }
+                                return;
                             }
-                            return;
                         }
+                        // 如果播放开始时光标在选区后，则不检查选区结束位置，播放到音频结尾
                     }
                     
                     updatePlaybackUI();
@@ -1718,6 +1726,66 @@
             }
             
             if (emptyState) emptyState.classList.add('hidden');
+            
+            // 更新拖拽手柄位置（确保在缩放和滚动时严格跟随选区）
+            if (selectionStart !== null && selectionEnd !== null && currentSound) {
+                updateDragHandlePosition();
+            }
+        }
+        
+        // 更新拖拽手柄位置（严格绑定选区）
+        function updateDragHandlePosition() {
+            const dragHandle = document.getElementById('dragHandle');
+            const waveContainer = document.getElementById('waveformContainer');
+            
+            if (!dragHandle || !waveContainer || !currentSound) return;
+            
+            const start = selectionStart;
+            const end = selectionEnd;
+            
+            if (start === null || end === null || start >= end) {
+                dragHandle.classList.add('hidden');
+                dragHandle.setAttribute('draggable', 'false');
+                return;
+            }
+            
+            const containerWidth = waveContainer.offsetWidth;
+            const actualWidth = containerWidth * waveformZoomLevel;
+            const selStartX = (start / currentSound.duration) * actualWidth;
+            const selEndX = (end / currentSound.duration) * actualWidth;
+            
+            // 可见区域边界 - 精确计算，严格绑定选区
+            let visibleLeft = selStartX - waveformScrollOffset;
+            let visibleRight = selEndX - waveformScrollOffset;
+            
+            // 边界裁剪 - 确保拖拽区域严格跟随选区
+            visibleLeft = Math.max(0, Math.min(containerWidth, visibleLeft));
+            visibleRight = Math.max(0, Math.min(containerWidth, visibleRight));
+            
+            // 确保选区边界顺序正确
+            if (visibleLeft > visibleRight) {
+                [visibleLeft, visibleRight] = [visibleRight, visibleLeft];
+            }
+            
+            const handleWidth = Math.max(1, visibleRight - visibleLeft); // 最小1px，允许单线选区
+            
+            // 选区太小（小于5px）时直接隐藏拖拽手柄
+            if (handleWidth < 5) {
+                dragHandle.classList.add('hidden');
+                dragHandle.setAttribute('draggable', 'false');
+            } else {
+                dragHandle.classList.remove('hidden');
+                dragHandle.setAttribute('draggable', 'true');
+                dragHandle.style.left = visibleLeft + 'px';
+                dragHandle.style.width = handleWidth + 'px';
+                dragHandle.style.right = 'auto';
+                
+                // 选区太窄时隐藏文字
+                const dragHandleText = document.getElementById('dragHandleText');
+                if (dragHandleText) {
+                    dragHandleText.style.display = handleWidth < 40 ? 'none' : 'inline';
+                }
+            }
         }
 
         // 绘制装饰性波形（空状态）
@@ -2166,17 +2234,17 @@
                         let playStart = currentTime;
                         let playEnd = currentSound.duration / 1000; // 使用currentSound.duration
 
-                        // 智能判断播放范围
+                        // 智能判断播放范围 - 专业音频软件逻辑
                         if (currentTime >= selStart && currentTime <= selEnd) {
-                            // 光标在选区内 -> 播放到选区结束停止
+                            // 光标在选区内 -> 从当前位置播放到选区结束
                             playStart = currentTime;
                             playEnd = selEnd;
                         } else if (currentTime < selStart) {
-                            // 光标在选区前 -> 播放到选区结束
-                            playStart = currentTime;
+                            // 光标在选区前 -> 从选区开始播放到选区结束
+                            playStart = selStart;
                             playEnd = selEnd;
                         } else {
-                            // 光标在选区后 -> 播放到音频结尾
+                            // 光标在选区后 -> 从光标位置播放到音频结尾
                             playStart = currentTime;
                             playEnd = currentSound.duration / 1000;
                         }
@@ -2369,12 +2437,8 @@
                         // 拖拽结束
                         isSelecting = false;
 
-                        // 如果选区太小，视为无效选择
-                        if (selectionEnd - selectionStart < 0.1) {
-                            selectionStart = null;
-                            selectionEnd = null;
-                            updateSelectionInfo(null, null);
-                        }
+                        // 移除选区最小限制，允许单线选区
+                        // 即使选区很小也保持有效选择
                         requestAnimationFrame(() => drawMainWaveform());
                     } else if (deltaX <= DRAG_THRESHOLD && deltaTime < 300) {
                         // 点击（移动少且时间短）- 定位播放头
@@ -2405,11 +2469,8 @@
             waveformCanvas.addEventListener('mouseleave', () => {
                 if (isSelecting) {
                     isSelecting = false;
-                    if (selectionEnd - selectionStart < 0.1) {
-                        selectionStart = null;
-                        selectionEnd = null;
-                        updateSelectionInfo(null, null);
-                    }
+                    // 移除选区最小限制，允许单线选区
+                    // 即使选区很小也保持有效选择
                     requestAnimationFrame(() => drawMainWaveform());
                 }
             });
@@ -2429,41 +2490,8 @@
                     if (selectionStartEl) selectionStartEl.textContent = (start / 1000).toFixed(2);
                     if (selectionEndEl) selectionEndEl.textContent = (end / 1000).toFixed(2);
 
-                    // 显示拖拽手柄，并根据选区位置定位
-                    if (dragHandle) {
-                        dragHandle.classList.remove('hidden');
-
-                        // 计算选区在可见区域的像素位置
-                        if (waveContainer && currentSound) {
-                            const containerWidth = waveContainer.offsetWidth;
-                            const actualWidth = containerWidth * waveformZoomLevel;
-                            const selStartX = (start / currentSound.duration) * actualWidth;
-                            const selEndX = (end / currentSound.duration) * actualWidth;
-
-                            // 可见区域边界
-                            let visibleLeft = selStartX - waveformScrollOffset;
-                            let visibleRight = selEndX - waveformScrollOffset;
-
-                            // 边界裁剪
-                            visibleLeft = Math.max(0, visibleLeft);
-                            visibleRight = Math.min(containerWidth, visibleRight);
-
-                            const handleWidth = Math.max(10, visibleRight - visibleLeft); // 最小10px，更细窄
-
-                            dragHandle.style.left = visibleLeft + 'px';
-                            dragHandle.style.width = handleWidth + 'px';
-                            dragHandle.style.right = 'auto';
-
-                            // 选区太窄时隐藏文字
-                            const dragHandleText = document.getElementById('dragHandleText');
-                            if (dragHandleText) {
-                                dragHandleText.style.display = handleWidth < 40 ? 'none' : 'inline';
-                            }
-                        }
-
-                        // 设置draggable属性 - 只在dragHandle上允许拖拽
-                        dragHandle.setAttribute('draggable', 'true');
-                    }
+                    // 使用统一的拖拽手柄更新函数（严格绑定选区）
+                    updateDragHandlePosition();
                 } else {
                     if (selectionInfoEl) selectionInfoEl.classList.add('hidden');
 
@@ -2756,17 +2784,17 @@
                                 let playStart = currentTime;
                                 let playEnd = currentSound.duration / 1000; // 使用currentSound.duration
 
-                                // 智能判断播放范围
+                                // 智能判断播放范围 - 专业音频软件逻辑
                                 if (currentTime >= selStart && currentTime <= selEnd) {
-                                    // 光标在选区内 -> 播放到选区结束停止
+                                    // 光标在选区内 -> 从当前位置播放到选区结束
                                     playStart = currentTime;
                                     playEnd = selEnd;
                                 } else if (currentTime < selStart) {
-                                    // 光标在选区前 -> 播放到选区结束
-                                    playStart = currentTime;
+                                    // 光标在选区前 -> 从选区开始播放到选区结束
+                                    playStart = selStart;
                                     playEnd = selEnd;
                                 } else {
-                                    // 光标在选区后 -> 播放到音频结尾
+                                    // 光标在选区后 -> 从光标位置播放到音频结尾
                                     playStart = currentTime;
                                     playEnd = currentSound.duration / 1000;
                                 }
@@ -2821,7 +2849,7 @@
                     }
                 }
                 
-                // 正常播放结束处理
+                // 正常播放结束处理（选区后区域或其他情况）
                 isPlaying = false;
                 pausePlayback();
                 // 移除ended监听器
