@@ -466,6 +466,7 @@
         
         // ==================== AUDIO PLAYER ====================
         let audioPlayer = null;
+        let currentBlobUrl = null; // 追踪当前使用的 Blob URL，用于释放
         let animationFrameId = null;
         
         // 使用 requestAnimationFrame 实现毫秒级平滑播放头更新
@@ -769,6 +770,11 @@
                     isPlaying = false;
                     stopPlaybackAnimation(); // 停止动画更新
                     if (playbackInterval) clearInterval(playbackInterval);
+                    // 播放结束时释放 Blob URL，防止内存泄漏
+                    if (currentBlobUrl) {
+                        URL.revokeObjectURL(currentBlobUrl);
+                        currentBlobUrl = null;
+                    }
                     updatePlaybackUI();
                     renderSoundList(document.getElementById('searchInput').value);
                 }
@@ -796,28 +802,36 @@
         
         async function loadAndPlaySound(sound) {
             console.log('[loadAndPlaySound] 开始播放:', sound);
-            
+
             try {
                 if (!sound.filePath) {
                     console.error('[loadAndPlaySound] 缺少文件路径');
                     showNotification('无法播放：缺少文件路径', 'error');
                     return;
                 }
-                
+
                 // 确保 audioPlayer 存在
                 if (!audioPlayer) {
                     console.log('[loadAndPlaySound] 初始化 audioPlayer');
                     initAudioPlayer();
                 }
-                
+
+                // 释放旧的 Blob URL，防止内存泄漏
+                if (currentBlobUrl) {
+                    console.log('[loadAndPlaySound] 释放旧 Blob URL:', currentBlobUrl);
+                    URL.revokeObjectURL(currentBlobUrl);
+                    currentBlobUrl = null;
+                }
+
                 let audioSrc;
-                
+                let isBlobUrl = false;
+
                 // 优先使用主进程 IPC 读取本地音频文件
                 if (window.electronAPI && window.electronAPI.readAudioFile) {
                     console.log('[Frontend] Calling readAudioFile:', sound.filePath);
                     const result = await window.electronAPI.readAudioFile(sound.filePath);
                     console.log('[Frontend] readAudioFile result:', result);
-                    
+
                     if (result && result.success) {
                         const uint8Array = new Uint8Array(result.data);
                         // 根据文件类型设置正确的 MIME 类型
@@ -835,6 +849,8 @@
                         const mimeType = mimeTypes[fileExt] || 'audio/wav';
                         const blob = new Blob([uint8Array], { type: mimeType });
                         audioSrc = URL.createObjectURL(blob);
+                        currentBlobUrl = audioSrc; // 记录 Blob URL 以便后续释放
+                        isBlobUrl = true;
                         console.log('[Frontend] 播放音频（通过 IPC）:', sound.filePath, 'MIME:', mimeType);
                     } else {
                         console.warn('[Frontend] readAudioFile 失败，使用后备方案');
@@ -850,15 +866,38 @@
                     }
                     console.log('[Frontend] 播放音频（后备）:', audioSrc);
                 }
-                
+
                 // 设置音频源
                 audioPlayer.src = audioSrc;
                 audioPlayer.volume = currentVolume / 100;
                 audioPlayer.muted = isMuted;
                 audioPlayer.loop = isLooping;
-                
+
                 console.log('[loadAndPlaySound] 开始播放...');
-                
+
+                // 等待音频元数据加载完成后再播放，确保播放稳定
+                await new Promise((resolve, reject) => {
+                    const onLoaded = () => {
+                        audioPlayer.removeEventListener('loadedmetadata', onLoaded);
+                        audioPlayer.removeEventListener('error', onError);
+                        console.log('[loadAndPlaySound] 音频元数据加载完成');
+                        resolve();
+                    };
+                    const onError = (e) => {
+                        audioPlayer.removeEventListener('loadedmetadata', onLoaded);
+                        audioPlayer.removeEventListener('error', onError);
+                        reject(new Error('音频加载失败'));
+                    };
+
+                    // 如果已经加载完成，直接解决
+                    if (audioPlayer.readyState >= 1) {
+                        resolve();
+                    } else {
+                        audioPlayer.addEventListener('loadedmetadata', onLoaded);
+                        audioPlayer.addEventListener('error', onError);
+                    }
+                });
+
                 // 尝试播放
                 try {
                     await audioPlayer.play();
@@ -871,6 +910,11 @@
                     if (!audioSrc.startsWith('file://') && !audioSrc.startsWith('blob:')) {
                         audioSrc = 'file://' + encodeURI(sound.filePath).replace(/#/g, '%23');
                         audioPlayer.src = audioSrc;
+                        // 释放之前的 Blob URL（如果有）
+                        if (currentBlobUrl) {
+                            URL.revokeObjectURL(currentBlobUrl);
+                            currentBlobUrl = null;
+                        }
                         try {
                             await audioPlayer.play();
                             isPlaying = true;
@@ -884,10 +928,10 @@
                         showNotification('播放失败: ' + playError.message, 'error');
                     }
                 }
-                
+
                 updatePlaybackUI();
                 renderSoundList(document.getElementById('searchInput').value);
-                
+
             } catch (error) {
                 console.error('[loadAndPlaySound] 总体错误:', error);
                 if (typeof showNotification === 'function') {
@@ -1515,6 +1559,11 @@
             if (audioPlayer) {
                 audioPlayer.pause();
                 audioPlayer.currentTime = 0;
+            }
+            // 释放 Blob URL，防止内存泄漏
+            if (currentBlobUrl) {
+                URL.revokeObjectURL(currentBlobUrl);
+                currentBlobUrl = null;
             }
             isPlaying = false;
             playbackProgress = 0;
