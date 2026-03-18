@@ -295,7 +295,7 @@
             <!-- 拖拽手柄（选区拖拽导出） -->
             <div id="dragHandle" class="absolute top-0 left-0 right-0 h-8 z-20 cursor-grab hidden" style="background: linear-gradient(to bottom, rgba(59, 130, 246, 0.3), transparent);">
                 <div class="flex items-center justify-center h-full">
-                    <span class="text-xs text-blue-400 opacity-80">拖拽到DAW导出选区</span>
+                    <span id="dragHandleText" class="text-xs text-blue-400 opacity-80 whitespace-nowrap">拖拽到DAW导出选区</span>
                 </div>
             </div>
 
@@ -2371,6 +2371,12 @@
                             dragHandle.style.left = visibleLeft + 'px';
                             dragHandle.style.width = handleWidth + 'px';
                             dragHandle.style.right = 'auto';
+
+                            // 选区太窄时隐藏文字
+                            const dragHandleText = document.getElementById('dragHandleText');
+                            if (dragHandleText) {
+                                dragHandleText.style.display = handleWidth < 60 ? 'none' : 'inline';
+                            }
                         }
 
                         // 设置draggable属性
@@ -2405,6 +2411,9 @@
                         return;
                     }
 
+                    // 禁用canvas的draggable避免冲突
+                    waveformCanvas.draggable = false;
+
                     isDraggingSelection = true;
 
                     // 调用后端API创建临时裁剪文件
@@ -2424,9 +2433,10 @@
                             const result = await response.json();
                             draggedClipPath = result.output_path;
 
-                            // 设置文件 URI（DAW 识别 file:// 协议）
-                            e.dataTransfer.setData('text/uri-list', 'file://' + draggedClipPath);
-                            e.dataTransfer.setData('text/plain', 'file://' + draggedClipPath);
+                            // 使用Windows兼容的file协议格式
+                            const filePath = draggedClipPath.replace(/\\/g, '/');
+                            e.dataTransfer.setData('text/uri-list', 'file:///' + filePath);
+                            e.dataTransfer.setData('text/plain', 'file:///' + filePath);
 
                             // 设置 JSON 数据
                             e.dataTransfer.setData('application/json', JSON.stringify({
@@ -2451,6 +2461,11 @@
 
                 dragHandle.addEventListener('dragend', async (e) => {
                     isDraggingSelection = false;
+
+                    // 恢复canvas的draggable状态
+                    if (selectionStart !== null && selectionEnd !== null) {
+                        waveformCanvas.draggable = true;
+                    }
 
                     // 删除临时文件
                     if (draggedClipPath) {
@@ -2502,9 +2517,10 @@
                             const result = await response.json();
                             draggedClipPath = result.output_path;
 
-                            // 设置文件 URI
-                            e.dataTransfer.setData('text/uri-list', 'file://' + draggedClipPath);
-                            e.dataTransfer.setData('text/plain', 'file://' + draggedClipPath);
+                            // 使用Windows兼容的file协议格式
+                            const filePath = draggedClipPath.replace(/\\/g, '/');
+                            e.dataTransfer.setData('text/uri-list', 'file:///' + filePath);
+                            e.dataTransfer.setData('text/plain', 'file:///' + filePath);
 
                             // 设置 JSON 数据
                             e.dataTransfer.setData('application/json', JSON.stringify({
