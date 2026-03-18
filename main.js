@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, dialog, protocol, net, session } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, dialog, protocol, net, session, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -359,6 +359,141 @@ function setupIpcHandlers() {
           return await fadeResponse.json();
         }
 
+        case 'audio-processing': {
+          console.log('[IPC] audio-processing:', data.action);
+          switch (data.action) {
+            case 'analyze': {
+              try {
+                const fs = require('fs');
+                const pathModule = require('path');
+                const filePath = data.filePath;
+                if (!fs.existsSync(filePath)) {
+                  return { success: false, error: '文件不存在' };
+                }
+                const stats = fs.statSync(filePath);
+                return {
+                  success: true,
+                  data: {
+                    path: filePath,
+                    name: pathModule.basename(filePath),
+                    size: stats.size,
+                    created: stats.birthtime,
+                    modified: stats.mtime,
+                    format: pathModule.extname(filePath).toLowerCase()
+                  }
+                };
+              } catch (error) {
+                return { success: false, error: error.message };
+              }
+            }
+            case 'metadata': {
+              try {
+                const fs = require('fs');
+                const pathModule = require('path');
+                const filePath = data.filePath;
+                if (!fs.existsSync(filePath)) {
+                  return { success: false, error: '文件不存在' };
+                }
+                const stats = fs.statSync(filePath);
+                return {
+                  success: true,
+                  data: {
+                    path: filePath,
+                    filename: pathModule.basename(filePath),
+                    size: stats.size,
+                    format: pathModule.extname(filePath).toLowerCase(),
+                    lastModified: stats.mtime
+                  }
+                };
+              } catch (error) {
+                return { success: false, error: error.message };
+              }
+            }
+            default:
+              return { success: false, error: '未知的 audio-processing 操作' };
+          }
+        }
+
+        case 'project-manager': {
+          console.log('[IPC] project-manager:', data.action);
+          switch (data.action) {
+            case 'create': {
+              return { success: true, message: '项目创建功能待实现', data: null };
+            }
+            case 'open': {
+              return { success: true, message: '项目打开功能待实现', data: null };
+            }
+            case 'save': {
+              return { success: true, message: '项目保存功能待实现' };
+            }
+            case 'close': {
+              return { success: true, message: '项目关闭功能待实现' };
+            }
+            default:
+              return { success: false, error: '未知的 project-manager 操作' };
+          }
+        }
+
+        case 'theme-manager': {
+          console.log('[IPC] theme-manager:', data);
+          switch (data.action) {
+            case 'get': {
+              const isDark = document.documentElement.classList.contains('dark');
+              return { success: true, theme: isDark ? 'dark' : 'light' };
+            }
+            case 'set': {
+              if (data.theme === 'dark') {
+                document.documentElement.classList.add('dark');
+              } else {
+                document.documentElement.classList.remove('dark');
+              }
+              return { success: true };
+            }
+            case 'toggle': {
+              document.documentElement.classList.toggle('dark');
+              const isDark = document.documentElement.classList.contains('dark');
+              return { success: true, theme: isDark ? 'dark' : 'light' };
+            }
+            default:
+              return { success: false, error: '未知的 theme-manager 操作' };
+          }
+        }
+
+        case 'shortcuts-register': {
+          return { success: true, id: Date.now().toString(), message: '快捷键注册功能待实现' };
+        }
+
+        case 'shortcuts-unregister': {
+          return { success: true, message: '快捷键注销功能待实现' };
+        }
+
+        case 'dialog-message': {
+          const result = await dialog.showMessageBox(mainWindow, data);
+          return result;
+        }
+
+        case 'dialog-open': {
+          const result = await dialog.showOpenDialog(mainWindow, data);
+          return result;
+        }
+
+        case 'dialog-save': {
+          const result = await dialog.showSaveDialog(mainWindow, data);
+          return result;
+        }
+
+        case 'notification-show': {
+          if (process.platform === 'darwin' && app.dock) {
+            const notification = new Notification({
+              title: data.title,
+              body: data.body
+            });
+            notification.show();
+            return { success: true };
+          }
+          return { success: false, error: '通知功能在此平台不可用' };
+        }
+
         default:
           return { success: false, error: '未知操作' };
       }
@@ -375,74 +510,148 @@ async function startBackendServer() {
     return { success: true, message: '后端服务已在运行' };
   }
 
-  try {
-    // 查找后端路径
-    const backendPath = path.join(__dirname, 'backend');
-    const mainPy = path.join(backendPath, 'main.py');
+  const maxRetries = 3;
+  let lastError = null;
 
-    // 检查后端文件是否存在
-    if (!fs.existsSync(mainPy)) {
-      // 尝试找 main.py 或检查是否有 venv
-      const files = fs.readdirSync(backendPath);
-      console.log('Backend files:', files);
-      return { success: false, error: '后端文件不存在' };
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[Backend] 启动尝试 ${attempt}/${maxRetries}...`);
+
+      // 查找后端路径
+      const backendPath = path.join(__dirname, 'backend');
+      const mainPy = path.join(backendPath, 'main.py');
+
+      // 检查后端文件是否存在
+      if (!fs.existsSync(mainPy)) {
+        const files = fs.readdirSync(backendPath);
+        console.log('Backend files:', files);
+        return { success: false, error: '后端文件不存在' };
+      }
+
+      // 优先使用 backend/venv 中的 Python 解释器
+      let pythonCmd = 'python';
+      const venvPython = path.join(backendPath, 'venv', 'bin', 'python');
+      const venvPython3 = path.join(backendPath, 'venv', 'bin', 'python3');
+
+      if (fs.existsSync(venvPython)) {
+        pythonCmd = venvPython;
+      } else if (fs.existsSync(venvPython3)) {
+        pythonCmd = venvPython3;
+      } else {
+        // 尝试系统 Python3
+        pythonCmd = 'python3';
+      }
+
+      console.log(`[Backend] 使用 Python: ${pythonCmd}`);
+
+      // 如果有之前的进程残留，先清理
+      if (backendProcess) {
+        try {
+          backendProcess.kill('SIGTERM');
+          await new Promise(r => setTimeout(r, 500));
+        } catch (e) {}
+        backendProcess = null;
+      }
+
+      // 启动后端进程
+      backendProcess = spawn(pythonCmd, [mainPy], {
+        cwd: backendPath,
+        env: { ...process.env, PYTHONUNBUFFERED: '1' },
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
+
+      // 收集启动日志
+      let startupOutput = '';
+      let errorOutput = '';
+
+      backendProcess.stdout.on('data', (data) => {
+        const text = data.toString();
+        startupOutput += text;
+        console.log('[Backend]', text);
+      });
+
+      backendProcess.stderr.on('data', (data) => {
+        const text = data.toString();
+        errorOutput += text;
+        // 只在启动阶段记录错误
+        if (attempt <= maxRetries) {
+          console.error('[Backend Warning]', text);
+        }
+      });
+
+      backendProcess.on('error', (error) => {
+        console.error('后端进程启动失败:', error);
+        lastError = error;
+        backendProcess = null;
+      });
+
+      backendProcess.on('exit', (code, signal) => {
+        console.log(`后端进程退出，代码: ${code}, 信号: ${signal}`);
+        if (code !== 0 && code !== null) {
+          console.error(`[Backend] 非正常退出，输出: ${startupOutput}`);
+          console.error(`[Backend] 错误输出: ${errorOutput}`);
+        }
+        backendProcess = null;
+      });
+
+      // 等待服务启动
+      await new Promise((resolve, reject) => {
+        let retries = 0;
+        const maxHealthChecks = 15;
+
+        const checkServer = setInterval(() => {
+          fetch(`${API_BASE_URL}/health`)
+            .then((response) => {
+              if (response.ok) {
+                clearInterval(checkServer);
+                console.log('[Backend] 服务健康检查通过');
+                resolve();
+              } else {
+                throw new Error(`健康检查失败: ${response.status}`);
+              }
+            })
+            .catch((err) => {
+              retries++;
+              console.log(`[Backend] 等待服务启动... (${retries}/${maxHealthChecks})`);
+              if (retries >= maxHealthChecks) {
+                clearInterval(checkServer);
+                reject(new Error(`服务启动超时\n启动输出: ${startupOutput}\n错误输出: ${errorOutput}`));
+              }
+            });
+        }, 1000);
+      });
+
+      console.log(`[Backend] 第 ${attempt} 次尝试成功启动`);
+      return { success: true, message: '后端服务已启动' };
+
+    } catch (error) {
+      lastError = error;
+      console.error(`[Backend] 第 ${attempt} 次启动失败:`, error.message);
+
+      // 如果还没达到最大重试次数，尝试清理后等待重试
+      if (attempt < maxRetries) {
+        console.log('[Backend] 等待 2 秒后重试...');
+
+        // 清理可能残留的进程
+        if (backendProcess) {
+          try {
+            backendProcess.kill('SIGKILL');
+          } catch (e) {}
+          backendProcess = null;
+        }
+
+        // 等待后重试
+        await new Promise(r => setTimeout(r, 2000));
+      }
     }
-
-    // 确定 Python 解释器
-    const venvPython = path.join(backendPath, 'venv', 'bin', 'python');
-    const pythonCmd = fs.existsSync(venvPython) ? venvPython : 'python';
-
-    // 启动后端进程
-    backendProcess = spawn(pythonCmd, [mainPy], {
-      cwd: backendPath,
-      env: { ...process.env, PYTHONUNBUFFERED: '1' },
-      stdio: ['ignore', 'pipe', 'pipe']
-    });
-
-    backendProcess.stdout.on('data', (data) => {
-      console.log('[Backend]', data.toString());
-    });
-
-    backendProcess.stderr.on('data', (data) => {
-      console.error('[Backend Error]', data.toString());
-    });
-
-    backendProcess.on('error', (error) => {
-      console.error('后端进程启动失败:', error);
-      backendProcess = null;
-    });
-
-    backendProcess.on('exit', (code) => {
-      console.log(`后端进程退出，代码: ${code}`);
-      backendProcess = null;
-    });
-
-    // 等待服务启动
-    await new Promise((resolve, reject) => {
-      let retries = 0;
-      const maxRetries = 30;
-
-      const checkServer = setInterval(() => {
-        fetch(`${API_BASE_URL}/health`)
-          .then(() => {
-            clearInterval(checkServer);
-            resolve();
-          })
-          .catch(() => {
-            retries++;
-            if (retries >= maxRetries) {
-              clearInterval(checkServer);
-              reject(new Error('服务启动超时'));
-            }
-          });
-      }, 1000);
-    });
-
-    return { success: true, message: '后端服务已启动' };
-  } catch (error) {
-    console.error('启动后端服务失败:', error);
-    return { success: false, error: error.message };
   }
+
+  // 所有重试都失败了
+  console.error('[Backend] 所有启动尝试均失败');
+  return {
+    success: false,
+    error: `后端服务启动失败，已尝试 ${maxRetries} 次\n最后错误: ${lastError?.message || '未知错误'}\n请检查：\n1. Python 依赖是否已安装 (cd backend && ./venv/bin/pip install -r requirements.txt)\n2. 端口 8000 是否被占用\n3. 数据库路径是否有写入权限`
+  };
 }
 
 // 停止后端服务器

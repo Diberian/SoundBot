@@ -3,14 +3,17 @@
 
 """接收文本查询，生成 embedding，在 ChromaDB 中搜索最相似的音频。返回 Top-K 结果，包含文件路径和相似度分数。"""
 
+import logging
 from typing import List, Optional, Dict, Any
 
 import numpy as np
 from pydantic import BaseModel
 
 import config
-from core.embedder import get_embedder
+from core.embedder import get_embedder, is_embedder_available
 from core.indexer import get_chroma_client
+
+logger = logging.getLogger(__name__)
 
 
 class SearchResult(BaseModel):
@@ -53,7 +56,7 @@ class AudioSearcher:
         except Exception as e:
             raise RuntimeError(f"无法获取 collection '{collection_name}': {e}")
         
-        print(f"[Searcher] 初始化完成，Collection: {collection_name}")
+        logger.info(f"Searcher 初始化完成，Collection: {collection_name}")
 
     def search(
         self,
@@ -80,10 +83,15 @@ class AudioSearcher:
         if min_similarity is None:
             min_similarity = config.SIMILARITY_THRESHOLD
         
-        print(f"[Searcher] 搜索: '{query}', top_k={top_k}")
-        
-        # 生成查询的 embedding
+        logger.info(f"搜索: '{query}', top_k={top_k}")
+
+        # 检查 embedder 是否可用
         embedder = get_embedder()
+        if embedder is None:
+            logger.warning("Embedder 不可用，无法执行语义搜索")
+            return []
+
+        # 生成查询的 embedding
         query_embedding = embedder.text_to_embedding(query)
         
         # 在 ChromaDB 中搜索
@@ -125,7 +133,7 @@ class AudioSearcher:
                     metadata=metadata
                 ))
         
-        print(f"[Searcher] 找到 {len(search_results)} 个结果")
+        logger.info(f"找到 {len(search_results)} 个结果")
         return search_results
 
     def search_by_embedding(
@@ -247,7 +255,7 @@ class AudioSearcher:
             return files
             
         except Exception as e:
-            print(f"[Searcher] 获取索引文件列表失败: {e}")
+            logger.error(f"获取索引文件列表失败: {e}")
             return []
 
     def get_collection_stats(self) -> Dict[str, Any]:
@@ -260,7 +268,7 @@ class AudioSearcher:
                 "persist_directory": self.persist_directory
             }
         except Exception as e:
-            print(f"[Searcher] 获取统计信息失败: {e}")
+            logger.error(f"获取统计信息失败: {e}")
             return {}
 
 

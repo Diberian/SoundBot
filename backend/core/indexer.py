@@ -6,6 +6,7 @@
 import os
 import json
 import hashlib
+import logging
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
@@ -14,8 +15,10 @@ from chromadb.config import Settings
 import numpy as np
 
 import config
-from core.embedder import get_embedder
+from core.embedder import get_embedder, is_embedder_available
 from core.scanner import AudioScanner
+
+logger = logging.getLogger(__name__)
 
 
 # 全局 ChromaDB 客户端（单例）
@@ -78,9 +81,9 @@ class AudioIndexer:
         # 记录已索引文件的元数据（用于增量更新）
         self.indexed_files_meta: Dict[str, Dict[str, Any]] = {}
         self._load_indexed_meta()
-        
-        print(f"[Indexer] 初始化完成，Collection: {collection_name}")
-        print(f"[Indexer] 已索引文件数量: {len(self.indexed_files_meta)}")
+
+        logger.info(f"Indexer 初始化完成，Collection: {collection_name}")
+        logger.info(f"已索引文件数量: {len(self.indexed_files_meta)}")
 
     def _load_indexed_meta(self) -> None:
         """加载已索引文件的元数据"""
@@ -90,7 +93,7 @@ class AudioIndexer:
                 with open(meta_file, 'r', encoding='utf-8') as f:
                     self.indexed_files_meta = json.load(f)
             except Exception as e:
-                print(f"[Indexer] 加载索引元数据失败: {e}")
+                logger.warning(f"加载索引元数据失败: {e}")
                 self.indexed_files_meta = {}
 
     def _save_indexed_meta(self) -> None:
@@ -100,7 +103,7 @@ class AudioIndexer:
             with open(meta_file, 'w', encoding='utf-8') as f:
                 json.dump(self.indexed_files_meta, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"[Indexer] 保存索引元数据失败: {e}")
+            logger.warning(f"保存索引元数据失败: {e}")
 
     def _get_file_hash(self, file_path: str) -> str:
         """
@@ -146,25 +149,24 @@ class AudioIndexer:
         Returns:
             索引结果统计
         """
-        print(f"[Indexer] 开始索引文件夹: {folder_path}")
-        
+        logger.info(f"开始索引文件夹: {folder_path}")
+
         # 扫描音频文件
         scanner = AudioScanner()
         audio_files = scanner.scan(folder_path, recursive)
-        
-        print(f"[Indexer] 找到 {len(audio_files)} 个音频文件")
-        
+
+        logger.info(f"找到 {len(audio_files)} 个音频文件")
+
         # 尝试初始化 embedder，如果失败则跳过 embedding
         embedder = None
-        try:
+        if is_embedder_available():
             embedder = get_embedder()
-        except Exception as e:
-            print(f"[Indexer] 无法加载 CLAP 模型: {e}")
-            print(f"[Indexer] 将只扫描文件，不生成语义索引")
-        
+        else:
+            logger.warning("Embedder 不可用，将只扫描文件，不生成语义索引")
+
         # 如果没有 embedder，直接返回扫描结果（不建索引）
         if embedder is None:
-            print(f"[Indexer] 跳过索引建立，直接返回 {len(audio_files)} 个文件")
+            logger.info(f"跳过索引建立，直接返回 {len(audio_files)} 个文件")
             return {
                 "added": 0,
                 "updated": 0,
@@ -189,7 +191,7 @@ class AudioIndexer:
             else:
                 to_add.append((file_id, file_path, audio_file))
         
-        print(f"[Indexer] 需要新增: {len(to_add)}, 需要更新: {len(to_update)}")
+        logger.info(f"需要新增: {len(to_add)}, 需要更新: {len(to_update)}")
         
         # 处理新增文件
         added_count = 0
@@ -197,8 +199,8 @@ class AudioIndexer:
             try:
                 # 生成 embedding
                 if embedder is None:
-                    # 没有 embedder 时，跳过 embedding
-                    print(f"[Indexer] 跳过 embedding: {file_path}")
+                    # 没有 embedder 时，不应到达此处
+                    logger.warning(f"跳过 embedding: {file_path}")
                     continue
                     
                 embedding = embedder.audio_to_embedding(file_path)
@@ -227,7 +229,7 @@ class AudioIndexer:
                 added_count += 1
                 
             except Exception as e:
-                print(f"[Indexer] 索引文件失败 {file_path}: {e}")
+                logger.error(f"索引文件失败 {file_path}: {e}")
         
         # 处理需要更新的文件
         updated_count = 0
@@ -260,7 +262,7 @@ class AudioIndexer:
                 updated_count += 1
                 
             except Exception as e:
-                print(f"[Indexer] 更新索引失败 {file_path}: {e}")
+                logger.error(f"更新索引失败 {file_path}: {e}")
         
         # 保存索引元数据
         self._save_indexed_meta()
@@ -273,7 +275,7 @@ class AudioIndexer:
             "total_indexed": len(self.indexed_files_meta)
         }
         
-        print(f"[Indexer] 索引完成: {result}")
+        logger.info(f"索引完成: {result}")
         return result
 
     def add_single_audio(
@@ -297,7 +299,7 @@ class AudioIndexer:
             
             # 检查是否已存在
             if self.collection.get(ids=[file_id]).get("ids"):
-                print(f"[Indexer] 文件已存在: {file_path}")
+                logger.debug(f"文件已存在: {file_path}")
                 return False
             
             # 生成 embedding
@@ -309,7 +311,7 @@ class AudioIndexer:
             audio_info = scanner._process_file(Path(file_path))
             
             if audio_info is None:
-                print(f"[Indexer] 无法读取音频文件: {file_path}")
+                logger.error(f"无法读取音频文件: {file_path}")
                 return False
             
             meta = {
@@ -337,11 +339,11 @@ class AudioIndexer:
             self.indexed_files_meta[file_id] = meta
             self._save_indexed_meta()
             
-            print(f"[Indexer] 成功添加: {file_path}")
+            logger.info(f"成功添加: {file_path}")
             return True
-            
+
         except Exception as e:
-            print(f"[Indexer] 添加文件失败 {file_path}: {e}")
+            logger.error(f"添加文件失败 {file_path}: {e}")
             return False
 
     def remove_audio(self, file_path: str) -> bool:
@@ -360,7 +362,7 @@ class AudioIndexer:
             # 检查是否存在
             existing = self.collection.get(ids=[file_id])
             if not existing.get("ids"):
-                print(f"[Indexer] 文件不在索引中: {file_path}")
+                logger.debug(f"文件不在索引中: {file_path}")
                 return False
             
             # 从 ChromaDB 删除
@@ -371,11 +373,11 @@ class AudioIndexer:
                 del self.indexed_files_meta[file_id]
                 self._save_indexed_meta()
             
-            print(f"[Indexer] 成功移除: {file_path}")
+            logger.info(f"成功移除: {file_path}")
             return True
-            
+
         except Exception as e:
-            print(f"[Indexer] 移除文件失败 {file_path}: {e}")
+            logger.error(f"移除文件失败 {file_path}: {e}")
             return False
 
     def get_indexed_count(self) -> int:
@@ -395,7 +397,7 @@ class AudioIndexer:
         )
         self.indexed_files_meta = {}
         self._save_indexed_meta()
-        print("[Indexer] 索引已清空")
+        logger.info("索引已清空")
 
 
 # 全局单例

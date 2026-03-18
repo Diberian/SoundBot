@@ -23,6 +23,14 @@ HOST = "127.0.0.1"  # 只监听本地，安全
 PORT = 8000
 API_PREFIX = "/api/v1"
 
+# ==================== CORS 配置 ====================
+
+CORS_ORIGINS = [
+    "http://127.0.0.1:*",
+    "http://localhost:*",
+    "electron://*"
+]
+
 # ==================== 模型配置 ====================
 
 # CLAP 音频嵌入模型
@@ -82,3 +90,58 @@ def get_clap_device() -> str:
     if CLAP_DEVICE == "auto":
         return get_device()
     return CLAP_DEVICE
+
+
+def is_safe_path(file_path: str) -> bool:
+    """
+    检查文件路径是否存在路径遍历攻击
+
+    Args:
+        file_path: 要检查的文件路径
+
+    Returns:
+        路径是否安全
+    """
+    try:
+        path = Path(file_path).resolve()
+        return path.exists()
+    except (OSError, RuntimeError):
+        return False
+
+
+def validate_audio_path(file_path: str) -> Path:
+    """
+    验证音频文件路径是否安全
+
+    Args:
+        file_path: 音频文件路径
+
+    Returns:
+        验证后的 Path 对象
+
+    Raises:
+        HTTPException: 路径无效或不存在
+    """
+    from fastapi import HTTPException
+
+    if not file_path:
+        raise HTTPException(status_code=400, detail="文件路径不能为空")
+
+    try:
+        path = Path(file_path).resolve()
+
+        if not path.exists():
+            raise HTTPException(status_code=404, detail=f"文件不存在: {file_path}")
+
+        if not path.is_file():
+            raise HTTPException(status_code=400, detail=f"不是有效文件: {file_path}")
+
+        if path.suffix.lower() not in SUPPORTED_FORMATS:
+            raise HTTPException(status_code=400, detail=f"不支持的文件格式: {path.suffix}")
+
+        return path
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"无效的路径: {e}")

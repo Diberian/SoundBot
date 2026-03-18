@@ -4,12 +4,15 @@
 扫描指定文件夹及其子文件夹，识别音频文件并提取元数据。
 """
 
+import logging
 import os
 from pathlib import Path
 from typing import List, Optional
 import librosa
 import soundfile as sf
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 
 # 支持的音频格式
@@ -125,7 +128,7 @@ class AudioScanner:
                 )
             except Exception as e:
                 # 跳过无法读取的文件
-                print(f"无法读取音频文件 {file_path}: {e}")
+                logger.warning(f"无法读取音频文件 {file_path}: {e}")
                 return None
 
     def is_audio_file(self, file_path: str) -> bool:

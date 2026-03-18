@@ -17,9 +17,9 @@ import uvicorn
 
 import config
 from models import schemas
-from core.indexer import get_indexer, AudioIndexer
-from core.searcher import get_searcher, AudioSearcher
-from core.embedder import get_embedder
+from core.indexer import get_indexer, AudioIndexer, reset_indexer
+from core.searcher import get_searcher, AudioSearcher, reset_searcher
+from core.embedder import get_embedder, reset_embedder, is_embedder_available
 from utils.logger import logger
 
 
@@ -29,17 +29,14 @@ async def lifespan(app: FastAPI):
     logger.info(f"SoundMind API 启动中...")
     logger.info(f"设备: {config.get_device()}")
     logger.info(f"数据库路径: {config.get_db_path()}")
-    
-    # 预热 embedder（延迟加载）
-    try:
-        embedder = get_embedder()
-        logger.info("Embedder 预热完成")
-    except Exception as e:
-        logger.warning(f"Embedder 预热失败: {e}")
-    
+
     yield
-    
+
     logger.info("SoundMind API 关闭中...")
+    reset_embedder()
+    reset_indexer()
+    reset_searcher()
+    logger.info("全局单例状态已清理")
 
 
 # 创建 FastAPI 应用
@@ -53,10 +50,10 @@ app = FastAPI(
 # 添加 CORS 中间件
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=config.CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 
@@ -218,9 +215,9 @@ async def search_audio(request: schemas.SearchRequest):
 async def get_waveform(path: str = Query(..., description="音频文件路径")):
     """
     获取音频波形数据
-    
+
     将原始波形降采样到 2000 个峰值点，用于前端波形显示
-    
+
     返回格式：
     {
         "peaks": [0.1, 0.4, -0.3, ...],  # 降采样后的峰值数组
@@ -232,17 +229,10 @@ async def get_waveform(path: str = Query(..., description="音频文件路径"))
     import urllib.parse
     import librosa
     import numpy as np
-    
-    # 解码 URL 编码的路径
+
     file_path = urllib.parse.unquote(path)
-    
-    audio_file = Path(file_path)
-    
-    if not audio_file.exists():
-        raise HTTPException(status_code=404, detail=f"文件不存在: {file_path}")
-    
-    if not audio_file.is_file():
-        raise HTTPException(status_code=400, detail=f"不是有效文件: {file_path}")
+
+    audio_file = config.validate_audio_path(file_path)
     
     try:
         # 加载音频
@@ -293,20 +283,13 @@ async def get_waveform(path: str = Query(..., description="音频文件路径"))
 async def get_audio(file_path: str = PathParam(..., description="音频文件路径")):
     """
     提供音频文件播放服务
-    
+
     支持范围请求（用于前端波形显示和流式播放）
     """
-    # 解码 URL 编码的路径
     import urllib.parse
     file_path = urllib.parse.unquote(file_path)
-    
-    audio_file = Path(file_path)
-    
-    if not audio_file.exists():
-        raise HTTPException(status_code=404, detail=f"文件不存在: {file_path}")
-    
-    if not audio_file.is_file():
-        raise HTTPException(status_code=400, detail=f"不是有效文件: {file_path}")
+
+    audio_file = config.validate_audio_path(file_path)
     
     # 获取文件大小
     file_size = audio_file.stat().st_size
@@ -380,52 +363,6 @@ async def get_indexed_files():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ==================== 扫描文件（不建索引）====================
-
-@app.post("/api/v1/scan-only", response_model=schemas.ScanResponse)
-async def scan_files_only(request: schemas.ScanRequest):
-    """
-    仅扫描音频文件，不建立索引（适用于没有 CLAP 模型的情况）
-    
-    - **folder_path**: 要扫描的文件夹路径
-    - **recursive**: 是否递归扫描子文件夹
-    """
-    from core.scanner import AudioScanner
-    
-    folder = Path(request.folder_path)
-    
-    if not folder.exists():
-        raise HTTPException(status_code=404, detail=f"文件夹不存在: {request.folder_path}")
-    
-    if not folder.is_dir():
-        raise HTTPException(status_code=400, detail=f"路径不是文件夹: {request.folder_path}")
-    
-    try:
-        scanner = AudioScanner()
-        audio_files = scanner.scan(str(folder), request.recursive)
-        
-        files = []
-        for f in audio_files:
-            files.append(schemas.AudioFile(
-                path=f.path,
-                filename=f.filename,
-                duration=f.duration,
-                sample_rate=f.sample_rate,
-                channels=f.channels,
-                format=f.format,
-                size=f.size
-            ))
-        
-        return schemas.ScanResponse(
-            total=len(files),
-            files=files
-        )
-        
-    except Exception as e:
-        logger.error(f"扫描失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 # ==================== 音频裁切 ====================
 
 @app.post("/api/export/clip", response_model=schemas.ClipResponse)
@@ -440,11 +377,8 @@ async def export_clip(request: schemas.ClipRequest):
     """
     import soundfile as sf
     import numpy as np
-    
-    source_file = Path(request.path)
-    
-    if not source_file.exists():
-        raise HTTPException(status_code=404, detail=f"文件不存在: {request.path}")
+
+    source_file = config.validate_audio_path(request.path)
     
     if request.start >= request.end:
         raise HTTPException(status_code=400, detail="起始时间必须小于结束时间")
@@ -503,11 +437,8 @@ async def audio_fade(request: schemas.FadeRequest):
     """
     import soundfile as sf
     import numpy as np
-    
-    source_file = Path(request.path)
-    
-    if not source_file.exists():
-        raise HTTPException(status_code=404, detail=f"文件不存在: {request.path}")
+
+    source_file = config.validate_audio_path(request.path)
     
     try:
         # 读取音频

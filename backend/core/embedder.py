@@ -6,14 +6,24 @@ CLAP 音频-文本嵌入模型封装
 支持音频-文本对齐搜索功能。
 """
 
+import logging
+import os
+import socket
 import torch
 import numpy as np
 from typing import Optional
 from pathlib import Path
+from contextlib import contextmanager
 
 import librosa
 import config
 from utils.audio_utils import load_audio
+
+logger = logging.getLogger(__name__)
+
+os.environ["HF_HUB_DISABLE_SYMLINKS"] = "1"
+os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0"
+os.environ["REQUESTS_CA_BUNDLE"] = ""
 
 
 class CLIPEmbedder:
@@ -26,25 +36,51 @@ class CLIPEmbedder:
             cls._instance = super().__new__(cls)
             cls._instance._initialized = False
         return cls._instance
-    
+
+    @contextmanager
+    def _timeout_context(self, seconds: int = 30):
+        """设置模型加载超时"""
+        import signal
+        def timeout_handler(signum, frame):
+            raise TimeoutError(f"模型加载超时 ({seconds}秒)")
+
+        old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(seconds)
+        try:
+            yield
+        finally:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, old_handler)
+
     def __init__(self):
         if self._initialized:
             return
-            
-        # 自动检测设备
+
         self.device = self._get_device()
-        print(f"[Embedder] 加载 CLAP 模型到 {self.device}...")
-        
-        # 动态导入 transformers，避免启动时卡顿
-        from transformers import ClapModel, ClapProcessor
-        
-        # 使用微软的 CLAP 模型（支持音频-文本对齐）
-        self.model = ClapModel.from_pretrained(config.CLAP_MODEL_NAME).to(self.device)
-        self.processor = ClapProcessor.from_pretrained(config.CLAP_MODEL_NAME)
-        
-        self.model.eval()
-        self._initialized = True
-        print("[Embedder] 模型加载完成")
+        logger.info(f"加载 CLAP 模型到 {self.device}...")
+
+        try:
+            from transformers import ClapModel, ClapProcessor
+
+            model_path = config.CLAP_MODEL_NAME
+            logger.info(f"正在从 HuggingFace 下载模型: {model_path}")
+
+            self.model = ClapModel.from_pretrained(
+                model_path,
+                device_map=self.device,
+                timeout=socket._GLOBAL_DEFAULT_TIMEOUT
+            )
+            self.processor = ClapProcessor.from_pretrained(model_path)
+
+            self.model.eval()
+            self._initialized = True
+            logger.info("CLAP 模型加载完成")
+        except TimeoutError as e:
+            logger.error(f"模型加载超时: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"模型加载失败: {e}")
+            raise
     
     def _get_device(self) -> torch.device:
         """自动检测可用的计算设备"""
@@ -134,21 +170,29 @@ class CLIPEmbedder:
 
 # 全局单例
 _embedder: Optional[CLIPEmbedder] = None
+_embedder_loading_failed: bool = False
 
 
 def get_embedder() -> Optional[CLIPEmbedder]:
     """获取 Embedder 单例（延迟加载），如果加载失败返回 None"""
-    global _embedder
-    if _embedder is None:
+    global _embedder, _embedder_loading_failed
+    if _embedder is None and not _embedder_loading_failed:
         try:
             _embedder = CLIPEmbedder()
         except Exception as e:
-            print(f"[Embedder] 无法加载模型: {e}")
+            logger.error(f"无法加载模型: {e}")
+            _embedder_loading_failed = True
             _embedder = None
     return _embedder
 
 
+def is_embedder_available() -> bool:
+    """检查 Embedder 是否可用"""
+    return get_embedder() is not None
+
+
 def reset_embedder() -> None:
     """重置 Embedder 单例（用于测试或重新加载模型）"""
-    global _embedder
+    global _embedder, _embedder_loading_failed
     _embedder = None
+    _embedder_loading_failed = False
