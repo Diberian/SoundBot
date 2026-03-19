@@ -49,7 +49,43 @@ MAX_AUDIO_DURATION = 300  # 最大处理 5 分钟音频
 
 # ==================== 临时文件配置 ====================
 
-TEMP_CLIP_DIR = "/tmp/soundmind"  # 裁切临时文件存放目录
+# 默认临时文件目录（应用目录下的 temp_clips 文件夹）
+def get_default_temp_clip_dir() -> str:
+    """获取默认临时文件目录（应用目录下）"""
+    import os
+    default_dir = os.path.join(BASE_DIR, '..', 'temp_clips')
+    # 确保目录存在
+    os.makedirs(default_dir, exist_ok=True)
+    return default_dir
+
+DEFAULT_TEMP_CLIP_DIR = get_default_temp_clip_dir()
+
+# 获取临时文件目录（支持用户自定义）
+def get_temp_clip_dir() -> str:
+    """
+    获取临时文件存放目录
+    优先从配置文件读取，否则使用应用目录下的默认路径
+    """
+    import json
+    import os
+    
+    # 尝试从配置文件读取
+    config_path = os.path.join(BASE_DIR, '..', 'config', 'user_config.json')
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+                temp_dir = config.get('tempClipDir')
+                if temp_dir and os.path.exists(temp_dir):
+                    return temp_dir
+        except Exception:
+            pass
+    
+    # 回退到默认路径（应用目录下）
+    return get_default_temp_clip_dir()
+
+# 向后兼容的变量（实际使用 get_temp_clip_dir() 函数）
+TEMP_CLIP_DIR = get_temp_clip_dir()
 
 # ==================== 搜索配置 ====================
 

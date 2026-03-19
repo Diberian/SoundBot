@@ -146,8 +146,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
     exportClip: (filePath, start, end, tempFile = true) => ipcRenderer.invoke('backend-api', 'export-clip', { filePath, start, end, tempFile }),
     
     // 音频淡入淡出
-    applyFade: (filePath, fadeIn, fadeOut) => ipcRenderer.invoke('backend-api', 'audio-fade', { filePath, fadeIn, fadeOut })
-  }
+    applyFade: (filePath, fadeIn, fadeOut) => ipcRenderer.invoke('backend-api', 'audio-fade', { filePath, fadeIn, fadeOut }),
+    
+    // 获取临时文件目录
+    getTempDir: () => ipcRenderer.invoke('backend-api', 'get-temp-dir'),
+    
+    // 设置临时文件目录
+    setTempDir: (tempDir) => ipcRenderer.invoke('backend-api', 'set-temp-dir', { tempDir })
+  },
+
+  // 平台信息
+  platform: process.platform,
+
+  // 获取应用路径
+  getAppPath: () => ipcRenderer.invoke('get-app-path'),
+
+  // 检查完全磁盘访问权限（macOS）
+  checkFullDiskAccess: () => ipcRenderer.invoke('check-full-disk-access'),
+
+  // 打开隐私设置（macOS）
+  openPrivacySettings: () => ipcRenderer.invoke('open-privacy-settings')
 });
 
 // 暴露一些常用的 Node.js 功能（安全版本）

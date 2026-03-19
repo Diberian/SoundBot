@@ -158,11 +158,52 @@ function setupIpcHandlers() {
     return { success: true };
   });
 
+  // 处理对话框
+  ipcMain.handle('dialog-open', async (event, options) => {
+    const result = await dialog.showOpenDialog(mainWindow, options);
+    return result;
+  });
+
+  ipcMain.handle('dialog-save', async (event, options) => {
+    const result = await dialog.showSaveDialog(mainWindow, options);
+    return result;
+  });
+
+  ipcMain.handle('dialog-message', async (event, options) => {
+    const result = await dialog.showMessageBox(mainWindow, options);
+    return result;
+  });
+
   // 处理应用设置
   ipcMain.handle('app-settings', async (event, settings) => {
     // 这里可以保存应用设置
     console.log('App settings:', settings);
     return { success: true };
+  });
+
+  // 获取应用路径
+  ipcMain.handle('get-app-path', () => {
+    return app.getAppPath();
+  });
+
+  // 检查完全磁盘访问权限（macOS）
+  ipcMain.handle('check-full-disk-access', () => {
+    if (process.platform !== 'darwin') {
+      return true; // 非 macOS 系统直接返回 true
+    }
+    // macOS 上无法直接检查权限，返回 null 让前端决定是否提示
+    return null;
+  });
+
+  // 打开隐私设置（macOS）
+  ipcMain.handle('open-privacy-settings', () => {
+    if (process.platform === 'darwin') {
+      // 打开系统偏好设置中的安全性与隐私
+      const { shell } = require('electron');
+      shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles');
+      return { success: true };
+    }
+    return { success: false, error: '仅支持 macOS' };
   });
 
   // 处理文件导入
@@ -369,23 +410,35 @@ function setupIpcHandlers() {
           const { filePath, start, end, tempFile } = data;
           console.log('[Electron] export-clip:', { filePath, start, end, tempFile });
 
-          // 强制 temp_file 为 true，确保使用临时目录
-          const requestBody = {
-            path: filePath,
-            start: start,
-            end: end,
-            temp_file: true  // 强制使用临时目录
-          };
-          console.log('[Electron] export-clip request:', JSON.stringify(requestBody));
+          try {
+            // 强制 temp_file 为 true，确保使用临时目录
+            const requestBody = {
+              path: filePath,
+              start: start,
+              end: end,
+              temp_file: true  // 强制使用临时目录
+            };
+            console.log('[Electron] export-clip request:', JSON.stringify(requestBody));
 
-          const clipResponse = await fetch(`http://127.0.0.1:${BACKEND_PORT}/api/export/clip`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody)
-          });
-          const result = await clipResponse.json();
-          console.log('[Electron] export-clip result:', result);
-          return result;
+            const clipResponse = await fetch(`http://127.0.0.1:${BACKEND_PORT}/api/export/clip`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(requestBody)
+            });
+            
+            if (!clipResponse.ok) {
+              const errorData = await clipResponse.json();
+              console.error('[Electron] export-clip HTTP error:', clipResponse.status, errorData);
+              return { success: false, error: errorData.detail || `HTTP ${clipResponse.status}` };
+            }
+            
+            const result = await clipResponse.json();
+            console.log('[Electron] export-clip result:', result);
+            return result;
+          } catch (error) {
+            console.error('[Electron] export-clip error:', error);
+            return { success: false, error: error.message };
+          }
         }
 
         case 'audio-fade': {
@@ -397,6 +450,33 @@ function setupIpcHandlers() {
             body: JSON.stringify({ path: filePath, fade_in: fadeIn, fade_out: fadeOut })
           });
           return await fadeResponse.json();
+        }
+
+        case 'get-temp-dir': {
+          // 获取临时文件目录
+          try {
+            const response = await fetch(`http://127.0.0.1:${BACKEND_PORT}/api/v1/config/temp-dir`);
+            return await response.json();
+          } catch (error) {
+            console.error('[IPC] get-temp-dir error:', error);
+            return { success: false, error: error.message };
+          }
+        }
+
+        case 'set-temp-dir': {
+          // 设置临时文件目录
+          try {
+            const { tempDir } = data;
+            const response = await fetch(`http://127.0.0.1:${BACKEND_PORT}/api/v1/config/temp-dir`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ temp_dir: tempDir })
+            });
+            return await response.json();
+          } catch (error) {
+            console.error('[IPC] set-temp-dir error:', error);
+            return { success: false, error: error.message };
+          }
         }
 
         case 'audio-processing': {

@@ -134,3 +134,17 @@ class FadeResponse(BaseModel):
     success: bool = Field(..., description="是否成功")
     output_path: Optional[str] = Field(None, description="输出文件路径")
     message: Optional[str] = Field(None, description="消息")
+
+
+# ==================== 临时文件路径配置模型 ====================
+
+class TempDirRequest(BaseModel):
+    """临时文件目录设置请求"""
+    temp_dir: str = Field(..., description="临时文件存放目录路径")
+
+
+class TempDirResponse(BaseModel):
+    """临时文件目录响应"""
+    temp_dir: str = Field(..., description="当前临时文件目录")
+    default_dir: str = Field(..., description="默认临时文件目录")
+    message: Optional[str] = Field(None, description="消息")

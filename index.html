@@ -116,6 +116,20 @@
                         <span>English</span><i data-lucide="check" class="w-4 h-4 check-icon hidden"></i>
                     </button>
                     <div class="border-t my-2" style="border-color: var(--border-color);"></div>
+                    <div class="px-3 py-2 text-xs font-medium uppercase tracking-wider opacity-50">临时文件目录</div>
+                    <button id="tempDirBtn" class="w-full px-4 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-2">
+                        <i data-lucide="folder" class="w-4 h-4"></i>
+                        <span id="tempDirText" class="truncate">加载中...</span>
+                    </button>
+                    <div id="tempDirPermissionHint" class="px-3 py-1 text-xs opacity-60 hidden" style="color: var(--text-secondary);">
+                        <i data-lucide="alert-triangle" class="w-3 h-3 inline mr-1"></i>
+                        此目录需要磁盘访问权限，点击重新选择以授权
+                    </div>
+                    <button id="resetTempDirBtn" class="w-full px-3 py-1 text-xs text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-1 opacity-60" style="color: var(--text-secondary);">
+                        <i data-lucide="rotate-ccw" class="w-3 h-3"></i>
+                        恢复默认位置
+                    </button>
+                    <div class="border-t my-2" style="border-color: var(--border-color);"></div>
                     <div class="px-3 py-2 text-xs font-medium uppercase tracking-wider opacity-50">AI 模型</div>
                     <button class="w-full px-4 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-between setting-option" data-type="model" data-value="gpt4">
                         <span>GPT-4</span><i data-lucide="check" class="w-4 h-4 check-icon"></i>
@@ -2171,6 +2185,299 @@
             const dropdown = document.getElementById('settingsDropdown');
             dropdown.classList.toggle('hidden');
             dropdown.classList.toggle('visible');
+            
+            // 打开设置时加载当前临时文件目录
+            if (!dropdown.classList.contains('hidden')) {
+                loadTempDir();
+            }
+        }
+        
+        // 加载临时文件目录
+        async function loadTempDir() {
+            const tempDirText = document.getElementById('tempDirText');
+            const permissionHint = document.getElementById('tempDirPermissionHint');
+            try {
+                if (window.electronAPI && window.electronAPI.backendAPI) {
+                    const result = await window.electronAPI.backendAPI.getTempDir();
+                    if (result && result.temp_dir) {
+                        // 显示路径的最后一部分
+                        const pathParts = result.temp_dir.split('/');
+                        const displayName = pathParts[pathParts.length - 1] || result.temp_dir;
+                        tempDirText.textContent = displayName;
+                        tempDirText.title = result.temp_dir; // 完整路径作为 tooltip
+                        
+                        // 检查是否需要权限提示（非应用目录）
+                        const appDir = await window.electronAPI.getAppPath();
+                        if (appDir && !result.temp_dir.startsWith(appDir)) {
+                            permissionHint.classList.remove('hidden');
+                            lucide.createIcons();
+                        } else {
+                            permissionHint.classList.add('hidden');
+                        }
+                    } else {
+                        tempDirText.textContent = '默认目录';
+                        permissionHint.classList.add('hidden');
+                    }
+                } else {
+                    tempDirText.textContent = '默认目录';
+                    permissionHint.classList.add('hidden');
+                }
+            } catch (error) {
+                console.error('加载临时文件目录失败:', error);
+                tempDirText.textContent = '默认目录';
+                permissionHint.classList.add('hidden');
+            }
+        }
+        
+        // 选择临时文件目录
+        async function selectTempDir() {
+            try {
+                if (window.electronAPI && window.electronAPI.dialogs) {
+                    // 如果是 macOS，先检查权限
+                    if (window.electronAPI.platform === 'darwin') {
+                        const hasPermission = await window.electronAPI.checkFullDiskAccess?.();
+                        if (hasPermission === false) {
+                            const grant = confirm('选择非应用目录需要完全磁盘访问权限。是否打开系统设置授权？');
+                            if (grant) {
+                                await window.electronAPI.openPrivacySettings?.();
+                            }
+                        }
+                    }
+                    
+                    const result = await window.electronAPI.dialogs.showOpenDialog({
+                        properties: ['openDirectory'],
+                        title: '选择临时文件存放目录',
+                        buttonLabel: '选择此文件夹',
+                        message: '提示：macOS 系统可能需要授予磁盘访问权限才能写入所选目录'
+                    });
+                    
+                    if (result && !result.canceled && result.filePaths && result.filePaths.length > 0) {
+                        const selectedPath = result.filePaths[0];
+                        
+                        // 检查是否为应用目录（macOS 权限限制）
+                        const appDir = await window.electronAPI.getAppPath?.();
+                        const isAppDir = appDir && selectedPath.startsWith(appDir);
+                        
+                        // 发送到后端保存
+                        if (window.electronAPI && window.electronAPI.backendAPI) {
+                            const saveResult = await window.electronAPI.backendAPI.setTempDir(selectedPath);
+                            if (saveResult && (saveResult.success !== false)) {
+                                // 更新显示
+                                const pathParts = selectedPath.split('/');
+                                const displayName = pathParts[pathParts.length - 1] || selectedPath;
+                                const tempDirText = document.getElementById('tempDirText');
+                                const permissionHint = document.getElementById('tempDirPermissionHint');
+                                tempDirText.textContent = displayName;
+                                tempDirText.title = selectedPath;
+                                
+                                // 显示或隐藏权限提示
+                                if (!isAppDir && window.electronAPI.platform === 'darwin') {
+                                    permissionHint.classList.remove('hidden');
+                                    lucide.createIcons();
+                                    showNotification(`临时文件目录已设置。如无法写入，请授予磁盘访问权限`, 'warning');
+                                } else {
+                                    permissionHint.classList.add('hidden');
+                                    showNotification(`临时文件目录已设置为: ${selectedPath}`, 'success');
+                                }
+                            } else {
+                                // 保存失败，可能是权限问题
+                                if (!isAppDir && window.electronAPI.platform === 'darwin') {
+                                    const retry = confirm('设置失败，可能是 macOS 磁盘访问权限限制。是否打开系统设置授权？');
+                                    if (retry) {
+                                        await window.electronAPI.openPrivacySettings?.();
+                                    }
+                                } else {
+                                    showNotification('设置临时文件目录失败: ' + (saveResult.detail || saveResult.error || '未知错误'), 'error');
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    showNotification('对话框功能不可用', 'error');
+                }
+            } catch (error) {
+                console.error('选择临时文件目录失败:', error);
+                showNotification('选择临时文件目录失败: ' + error.message, 'error');
+            }
+        }
+        
+        // 恢复默认临时文件目录
+        async function resetTempDirToDefault() {
+            try {
+                if (window.electronAPI && window.electronAPI.backendAPI) {
+                    // 获取默认路径
+                    const result = await window.electronAPI.backendAPI.getTempDir();
+                    const defaultPath = result.default_dir || '/tmp/soundmind';
+                    
+                    // 保存默认路径
+                    const saveResult = await window.electronAPI.backendAPI.setTempDir(defaultPath);
+                    if (saveResult && (saveResult.success !== false)) {
+                        // 更新显示
+                        const pathParts = defaultPath.split('/');
+                        const displayName = pathParts[pathParts.length - 1] || defaultPath;
+                        const tempDirText = document.getElementById('tempDirText');
+                        const permissionHint = document.getElementById('tempDirPermissionHint');
+                        tempDirText.textContent = displayName;
+                        tempDirText.title = defaultPath;
+                        permissionHint.classList.add('hidden');
+                        
+                        showNotification(`已恢复默认路径: ${defaultPath}`, 'success');
+                    } else {
+                        showNotification('恢复默认路径失败: ' + (saveResult.detail || saveResult.error || '未知错误'), 'error');
+                    }
+                }
+            } catch (error) {
+                console.error('恢复默认路径失败:', error);
+                showNotification('恢复默认路径失败: ' + error.message, 'error');
+            }
+        }
+        
+        // ==================== 首次启动设置弹窗 ====================
+        let firstTimeSelectedPath = null;
+        
+        // 显示首次启动弹窗
+        async function showFirstTimeSetupModal() {
+            const modal = document.getElementById('firstTimeSetupModal');
+            const pathDisplay = document.getElementById('firstTimeTempDirPath');
+            const confirmBtn = document.getElementById('firstTimeConfirmBtn');
+            
+            // 重置状态
+            firstTimeSelectedPath = null;
+            pathDisplay.textContent = '未选择';
+            confirmBtn.disabled = true;
+            confirmBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            
+            // 显示弹窗
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            
+            // 初始化图标
+            lucide.createIcons();
+        }
+        
+        // 隐藏首次启动弹窗
+        function hideFirstTimeSetupModal() {
+            const modal = document.getElementById('firstTimeSetupModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+        
+        // 首次启动选择目录
+        async function firstTimeSelectDir() {
+            try {
+                if (window.electronAPI && window.electronAPI.dialogs) {
+                    const result = await window.electronAPI.dialogs.showOpenDialog({
+                        properties: ['openDirectory'],
+                        title: '选择临时文件存放目录',
+                        buttonLabel: '选择此文件夹'
+                    });
+                    
+                    if (result && !result.canceled && result.filePaths && result.filePaths.length > 0) {
+                        firstTimeSelectedPath = result.filePaths[0];
+                        
+                        // 更新显示
+                        const pathDisplay = document.getElementById('firstTimeTempDirPath');
+                        pathDisplay.textContent = firstTimeSelectedPath;
+                        pathDisplay.title = firstTimeSelectedPath;
+                        
+                        // 启用确认按钮
+                        const confirmBtn = document.getElementById('firstTimeConfirmBtn');
+                        confirmBtn.disabled = false;
+                        confirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    }
+                } else {
+                    showNotification('对话框功能不可用', 'error');
+                }
+            } catch (error) {
+                console.error('选择目录失败:', error);
+                showNotification('选择目录失败: ' + error.message, 'error');
+            }
+        }
+        
+        // 首次启动使用默认路径
+        async function firstTimeUseDefault() {
+            try {
+                if (window.electronAPI && window.electronAPI.backendAPI) {
+                    // 获取默认路径
+                    const result = await window.electronAPI.backendAPI.getTempDir();
+                    const defaultPath = result.default_dir || '/tmp/soundmind';
+                    
+                    // 保存默认路径
+                    const saveResult = await window.electronAPI.backendAPI.setTempDir(defaultPath);
+                    if (saveResult && (saveResult.success !== false)) {
+                        // 标记设置完成
+                        localStorage.setItem('soundmind_setup_completed', 'true');
+                        showNotification(`已使用默认路径: ${defaultPath}`, 'success');
+                        hideFirstTimeSetupModal();
+                    } else {
+                        showNotification('设置默认路径失败', 'error');
+                    }
+                } else {
+                    hideFirstTimeSetupModal();
+                }
+            } catch (error) {
+                console.error('设置默认路径失败:', error);
+                showNotification('设置默认路径失败: ' + error.message, 'error');
+            }
+        }
+        
+        // 首次启动确认设置
+        async function firstTimeConfirm() {
+            if (!firstTimeSelectedPath) return;
+            
+            try {
+                if (window.electronAPI && window.electronAPI.backendAPI) {
+                    const saveResult = await window.electronAPI.backendAPI.setTempDir(firstTimeSelectedPath);
+                    if (saveResult && (saveResult.success !== false)) {
+                        // 标记设置完成
+                        localStorage.setItem('soundmind_setup_completed', 'true');
+                        showNotification(`临时文件目录已设置为: ${firstTimeSelectedPath}`, 'success');
+                        hideFirstTimeSetupModal();
+                    } else {
+                        showNotification('设置临时文件目录失败: ' + (saveResult.detail || saveResult.error || '未知错误'), 'error');
+                    }
+                } else {
+                    hideFirstTimeSetupModal();
+                }
+            } catch (error) {
+                console.error('确认设置失败:', error);
+                showNotification('确认设置失败: ' + error.message, 'error');
+            }
+        }
+        
+        // 检查是否需要显示首次启动弹窗
+        async function checkFirstTimeSetup() {
+            try {
+                // 检查本地存储标记
+                const hasCompletedSetup = localStorage.getItem('soundmind_setup_completed');
+                if (hasCompletedSetup === 'true') {
+                    return; // 已完成设置，不显示弹窗
+                }
+                
+                // 检查后端是否已有配置
+                if (window.electronAPI && window.electronAPI.backendAPI) {
+                    const result = await window.electronAPI.backendAPI.getTempDir();
+                    // 如果当前使用的是默认路径，且配置文件不存在，则认为是首次使用
+                    const configPath = '~/.soundmind/config.json';
+                    
+                    // 简单判断：如果临时目录是默认路径，显示弹窗让用户确认
+                    if (result.temp_dir === result.default_dir || result.temp_dir === '/tmp/soundmind') {
+                        // 延迟一点显示，等页面完全加载
+                        setTimeout(() => {
+                            showFirstTimeSetupModal();
+                        }, 500);
+                    } else {
+                        // 已有自定义配置，标记为已完成
+                        localStorage.setItem('soundmind_setup_completed', 'true');
+                    }
+                }
+            } catch (error) {
+                console.error('检查首次设置失败:', error);
+                // 出错时也显示弹窗
+                setTimeout(() => {
+                    showFirstTimeSetupModal();
+                }, 500);
+            }
         }
 
         function toggleTheme() {
@@ -2241,11 +2548,31 @@
             
             document.getElementById('themeToggle').addEventListener('click', toggleTheme);
             
+            // 临时文件目录按钮
+            document.getElementById('tempDirBtn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectTempDir();
+            });
+            
+            // 恢复默认临时文件目录按钮
+            document.getElementById('resetTempDirBtn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                resetTempDirToDefault();
+            });
+            
             document.querySelectorAll('.setting-option').forEach(btn => {
                 btn.addEventListener('click', () => {
                     updateSetting(btn.dataset.type, btn.dataset.value);
                 });
             });
+            
+            // 首次启动设置弹窗事件
+            document.getElementById('firstTimeSelectDirBtn').addEventListener('click', firstTimeSelectDir);
+            document.getElementById('firstTimeUseDefaultBtn').addEventListener('click', firstTimeUseDefault);
+            document.getElementById('firstTimeConfirmBtn').addEventListener('click', firstTimeConfirm);
+            
+            // 检查是否需要显示首次启动弹窗
+            checkFirstTimeSetup();
             
             // Search - 支持本地和后端语义搜索
             let searchTimeout = null;
@@ -2649,7 +2976,9 @@
                             result = await response.json();
                         }
 
-                        if (result.success && result.output_path) {
+                        console.log('[拖拽] 结果:', result);
+                        
+                        if (result && result.success && result.output_path) {
                             pendingDragPath = result.output_path;
                             console.log('[拖拽] 文件已生成:', pendingDragPath);
 
@@ -2659,7 +2988,7 @@
                                 console.log('[拖拽] startDrag 已调用');
                             }
                         } else {
-                            console.error('[拖拽] 失败:', result.message);
+                            console.error('[拖拽] 失败:', result?.message || result?.detail || result?.error || '未知错误', result);
                         }
                     } catch (error) {
                         console.error('[拖拽] 异常:', error);
@@ -3306,5 +3635,66 @@
             }
         });
     </script>
+    
+    <!-- ==================== 首次启动设置弹窗 ==================== -->
+    <div id="firstTimeSetupModal" class="fixed inset-0 z-[100] hidden items-center justify-center" style="background-color: rgba(0, 0, 0, 0.5);">
+        <div class="rounded-lg shadow-2xl p-6 w-[480px] max-w-[90vw] transition-colors duration-300"
+             style="background-color: var(--bg-secondary); border: 1px solid var(--border-color);">
+            <!-- 标题 -->
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-full flex items-center justify-center" style="background-color: var(--bg-tertiary);">
+                    <i data-lucide="folder-cog" class="w-5 h-5" style="color: var(--text-primary);"></i>
+                </div>
+                <div>
+                    <h2 class="text-lg font-semibold" style="color: var(--text-primary);">欢迎使用 SoundMind</h2>
+                    <p class="text-sm opacity-60" style="color: var(--text-secondary);">首次使用设置</p>
+                </div>
+            </div>
+            
+            <!-- 说明文字 -->
+            <div class="mb-6 space-y-3">
+                <p class="text-sm leading-relaxed" style="color: var(--text-secondary);">
+                    请设置裁切音频文件的临时存放目录。所有裁切后的片段将保存在此目录中，您可以随时在设置中更改。
+                </p>
+                <div class="p-3 rounded-md text-xs" style="background-color: var(--bg-tertiary); color: var(--text-secondary);">
+                    <i data-lucide="info" class="w-3 h-3 inline mr-1"></i>
+                    提示：建议选择一个易于访问的文件夹，方便您管理和使用裁切后的音频文件。
+                </div>
+            </div>
+            
+            <!-- 路径选择 -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium mb-2" style="color: var(--text-primary);">临时文件存放目录</label>
+                <div class="flex gap-2">
+                    <div class="flex-1 px-3 py-2 rounded-md text-sm border truncate flex items-center"
+                         style="background-color: var(--bg-primary); border-color: var(--border-color); color: var(--text-primary);"
+                         id="firstTimeTempDirPath">
+                        未选择
+                    </div>
+                    <button id="firstTimeSelectDirBtn" 
+                            class="px-4 py-2 rounded-md text-sm font-medium transition-colors hover:opacity-80 flex items-center gap-2"
+                            style="background-color: var(--text-primary); color: var(--bg-primary);">
+                        <i data-lucide="folder-open" class="w-4 h-4"></i>
+                        选择文件夹
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 按钮 -->
+            <div class="flex justify-end gap-3">
+                <button id="firstTimeUseDefaultBtn"
+                        class="px-4 py-2 rounded-md text-sm font-medium transition-colors hover:opacity-80"
+                        style="background-color: var(--bg-tertiary); color: var(--text-secondary);">
+                    使用默认路径
+                </button>
+                <button id="firstTimeConfirmBtn" disabled
+                        class="px-4 py-2 rounded-md text-sm font-medium transition-colors opacity-50 cursor-not-allowed"
+                        style="background-color: var(--text-primary); color: var(--bg-primary);">
+                    确认设置
+                </button>
+            </div>
+        </div>
+    </div>
+    
 </body>
 </html>
