@@ -34,7 +34,7 @@ CORS_ORIGINS = [
 # ==================== 模型配置 ====================
 
 # CLAP 音频嵌入模型
-CLAP_MODEL_NAME = "microsoft/msclap"
+CLAP_MODEL_NAME = "laion/clap-htsat-unfused"
 CLAP_DEVICE = "auto"  # auto/cpu/cuda/mps
 
 # ==================== 向量数据库配置 ====================

@@ -100,6 +100,10 @@ class CLIPEmbedder:
         """
         将音频文件转换为 embedding 向量
         
+        支持任意时长音频：
+        - 短音频 (< 30s): 直接处理
+        - 长音频 (>= 30s): 使用滑动窗口提取多个片段，然后聚合
+        
         Args:
             audio_path: 音频文件路径
             
@@ -110,29 +114,99 @@ class CLIPEmbedder:
             # 加载音频（支持各种格式）
             audio, sr = librosa.load(audio_path, sr=48000, mono=True)
             
-            # 限制音频长度（CLAP 通常处理 10-30 秒最佳）
-            max_samples = 30 * 48000  # 30秒
-            if len(audio) > max_samples:
-                audio = audio[:max_samples]
+            # 音频时长（秒）
+            duration = len(audio) / 48000
             
-            # 使用 processor 处理
-            inputs = self.processor(
-                audios=[audio], 
-                sampling_rate=48000, 
-                return_tensors="pt"
-            ).to(self.device)
+            # 短音频：直接处理
+            if duration <= 30:
+                return self._process_audio_segment(audio)
             
-            with torch.no_grad():
-                outputs = self.model.get_audio_features(**inputs)
-                embedding = outputs.cpu().numpy()[0]
-            
-            # 归一化（方便余弦相似度计算）
-            embedding = embedding / np.linalg.norm(embedding)
-            
-            return embedding
+            # 长音频：使用滑动窗口
+            logger.info(f"[Embedder] 长音频 ({duration:.1f}s)，使用滑动窗口处理")
+            return self._process_long_audio(audio)
             
         except Exception as e:
             raise RuntimeError(f"[Embedder] 处理 {audio_path} 失败: {e}")
+    
+    def _process_audio_segment(self, audio: np.ndarray) -> np.ndarray:
+        """
+        处理单个音频片段，生成 embedding
+        
+        Args:
+            audio: 音频数据（48kHz 采样率）
+            
+        Returns:
+            归一化的 embedding 向量
+        """
+        # 限制最大长度 30 秒
+        max_samples = 30 * 48000
+        if len(audio) > max_samples:
+            audio = audio[:max_samples]
+        
+        # 使用 processor 处理
+        inputs = self.processor(
+            audios=[audio], 
+            sampling_rate=48000, 
+            return_tensors="pt"
+        ).to(self.device)
+        
+        with torch.no_grad():
+            outputs = self.model.get_audio_features(**inputs)
+            embedding = outputs.cpu().numpy()[0]
+        
+        # 归一化
+        embedding = embedding / np.linalg.norm(embedding)
+        
+        return embedding
+    
+    def _process_long_audio(self, audio: np.ndarray, window_size: int = 30, hop_size: int = 10) -> np.ndarray:
+        """
+        使用滑动窗口处理长音频
+        
+        Args:
+            audio: 音频数据（48kHz 采样率）
+            window_size: 窗口大小（秒），默认 30
+            hop_size: 滑动步长（秒），默认 10
+            
+        Returns:
+            聚合后的 embedding 向量
+        """
+        window_samples = window_size * 48000
+        hop_samples = hop_size * 48000
+        
+        embeddings = []
+        total_samples = len(audio)
+        
+        # 滑动窗口提取 embedding
+        start = 0
+        segment_count = 0
+        while start < total_samples:
+            end = min(start + window_samples, total_samples)
+            segment = audio[start:end]
+            
+            # 如果片段太短（< 5秒），跳过
+            if len(segment) < 5 * 48000:
+                break
+            
+            # 处理片段
+            emb = self._process_audio_segment(segment)
+            embeddings.append(emb)
+            segment_count += 1
+            
+            start += hop_samples
+        
+        logger.info(f"[Embedder] 提取了 {segment_count} 个片段的 embedding")
+        
+        if not embeddings:
+            raise RuntimeError("无法提取有效的音频片段")
+        
+        # 聚合：使用平均池化（保留整体特征）
+        aggregated = np.mean(embeddings, axis=0)
+        
+        # 再次归一化
+        aggregated = aggregated / np.linalg.norm(aggregated)
+        
+        return aggregated
     
     def text_to_embedding(self, text: str) -> np.ndarray:
         """
