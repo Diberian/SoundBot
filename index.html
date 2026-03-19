@@ -154,8 +154,8 @@
                     </button>
                     <div class="border-t my-2" style="border-color: var(--border-color);"></div>
                     <button id="themeToggle" class="w-full px-4 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-2">
-                        <i data-lucide="sun" id="themeIconSun" class="w-4 h-4"></i>
-                        <i data-lucide="moon" id="themeIconMoon" class="w-4 h-4 hidden"></i>
+                        <i data-lucide="moon" id="themeIconMoon" class="w-4 h-4"></i>
+                        <i data-lucide="sun" id="themeIconSun" class="w-4 h-4 hidden"></i>
                         <span id="themeTextLight">切换深色模式</span>
                         <span id="themeTextDark" class="hidden">切换浅色模式</span>
                     </button>
@@ -2545,19 +2545,23 @@
             drawMainWaveform();
             
             // 更新主题切换按钮的图标和文字
+            // 当前浅色模式 -> 显示月亮（可切换到深色）
+            // 当前深色模式 -> 显示太阳（可切换到浅色）
             const sunIcon = document.getElementById('themeIconSun');
             const moonIcon = document.getElementById('themeIconMoon');
             const lightText = document.getElementById('themeTextLight');
             const darkText = document.getElementById('themeTextDark');
             
             if (isDark) {
-                sunIcon.classList.add('hidden');
-                moonIcon.classList.remove('hidden');
+                // 切换到深色模式：显示太阳（可切换回浅色）
+                moonIcon.classList.add('hidden');
+                sunIcon.classList.remove('hidden');
                 lightText.classList.add('hidden');
                 darkText.classList.remove('hidden');
             } else {
-                sunIcon.classList.remove('hidden');
-                moonIcon.classList.add('hidden');
+                // 切换到浅色模式：显示月亮（可切换到深色）
+                sunIcon.classList.add('hidden');
+                moonIcon.classList.remove('hidden');
                 lightText.classList.remove('hidden');
                 darkText.classList.add('hidden');
             }
@@ -2822,6 +2826,8 @@
             lucide.createIcons();
             
             // 初始化主题切换按钮状态
+            // 当前浅色模式 -> 显示月亮（可切换到深色）
+            // 当前深色模式 -> 显示太阳（可切换到浅色）
             const isDark = document.documentElement.classList.contains('dark');
             const sunIcon = document.getElementById('themeIconSun');
             const moonIcon = document.getElementById('themeIconMoon');
@@ -2829,13 +2835,15 @@
             const darkText = document.getElementById('themeTextDark');
             if (sunIcon && moonIcon && lightText && darkText) {
                 if (isDark) {
-                    sunIcon.classList.add('hidden');
-                    moonIcon.classList.remove('hidden');
+                    // 深色模式：显示太阳（可切换回浅色）
+                    moonIcon.classList.add('hidden');
+                    sunIcon.classList.remove('hidden');
                     lightText.classList.add('hidden');
                     darkText.classList.remove('hidden');
                 } else {
-                    sunIcon.classList.remove('hidden');
-                    moonIcon.classList.add('hidden');
+                    // 浅色模式：显示月亮（可切换到深色）
+                    sunIcon.classList.add('hidden');
+                    moonIcon.classList.remove('hidden');
                     lightText.classList.remove('hidden');
                     darkText.classList.add('hidden');
                 }
