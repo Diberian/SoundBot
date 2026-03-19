@@ -632,7 +632,14 @@
                 
                 // 初始化 Regions 插件 (v6)
                 if (window.WaveSurfer && window.WaveSurfer.regions) {
-                    wavesurferRegions = wavesurfer.registerPlugin(window.WaveSurfer.regions.create());
+                    try {
+                        // v6 使用 addPlugin 方法
+                        wavesurferRegions = wavesurfer.addPlugin(window.WaveSurfer.regions.create());
+                        console.log('[WaveSurfer] Regions 插件初始化成功');
+                    } catch (pluginError) {
+                        console.warn('[WaveSurfer] Regions 插件初始化失败:', pluginError);
+                        wavesurferRegions = null;
+                    }
                 }
                 
                 // 监听播放位置变化
