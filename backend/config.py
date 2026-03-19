@@ -28,7 +28,9 @@ API_PREFIX = "/api/v1"
 CORS_ORIGINS = [
     "http://127.0.0.1:*",
     "http://localhost:*",
-    "electron://*"
+    "electron://*",
+    "file://*",
+    "*"  # 允许所有 origin 用于本地开发
 ]
 
 # ==================== 模型配置 ====================

@@ -579,8 +579,8 @@
                 });
                 
                 // 初始化 Regions 插件 (v6)
-                if (WaveSurferRegions) {
-                    wavesurferRegions = wavesurfer.registerPlugin(WaveSurferRegions.create());
+                if (window.WaveSurfer && window.WaveSurfer.regions) {
+                    wavesurferRegions = wavesurfer.registerPlugin(window.WaveSurfer.regions.create());
                 }
                 
                 // 监听播放位置变化

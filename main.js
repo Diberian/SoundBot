@@ -427,16 +427,16 @@ function setupIpcHandlers() {
 
         case 'import-async': {
           // 异步导入（带进度推送）
-          const url = new URL(`${API_BASE_URL}/import/async`);
+          let url = `${API_BASE_URL}/import/async`;
           if (data.clientId) {
-            url.searchParams.append('client_id', data.clientId);
+            url += `?client_id=${encodeURIComponent(data.clientId)}`;
           }
-          console.log('[Electron] import-async 请求 URL:', url.toString());
+          console.log('[Electron] import-async 请求 URL:', url);
           console.log('[Electron] import-async 请求体:', JSON.stringify({
             folder_path: data.folderPath,
             recursive: data.recursive
           }));
-          const response = await fetch(url.toString(), {
+          const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

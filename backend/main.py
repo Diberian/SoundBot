@@ -109,8 +109,10 @@ async def websocket_scan_progress(websocket: WebSocket, client_id: str):
     - scan_complete: {"type": "scan_complete", "task_id": "xxx", "data": {...}}
     - scan_error: {"type": "scan_error", "task_id": "xxx", "data": {...}}
     """
+    logger.info(f"[WS] WebSocket 连接尝试: client_id={client_id}, origin={websocket.headers.get('origin')}")
     ws_manager = get_ws_manager()
     await ws_manager.connect(websocket, client_id)
+    logger.info(f"[WS] WebSocket 连接成功: client_id={client_id}")
     try:
         while True:
             data = await websocket.receive_text()
@@ -127,11 +129,12 @@ async def websocket_scan_progress(websocket: WebSocket, client_id: str):
                 await websocket.send_json({"type": "pong"})
 
     except WebSocketDisconnect:
+        logger.info(f"[WS] WebSocket 断开: client_id={client_id}")
         ws_manager.disconnect(websocket, client_id)
     except json.JSONDecodeError:
-        logger.warning(f"无效的 JSON 消息 from {client_id}")
+        logger.warning(f"[WS] 无效的 JSON 消息 from {client_id}")
     except Exception as e:
-        logger.error(f"WebSocket 错误: {e}")
+        logger.error(f"[WS] WebSocket 错误: {e}")
         ws_manager.disconnect(websocket, client_id)
 
 
