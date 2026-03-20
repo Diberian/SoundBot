@@ -335,8 +335,8 @@ class OptimizedAudioSearcher(AudioSearcher):
             filename = metadata.get("filename", "")
             keyword_score, match_level = self._keyword_match_score(query, filename, metadata)
 
-            # 只接受精确匹配和部分匹配
-            if match_level in ("exact", "partial") and keyword_score >= 0.7:
+            # 放宽匹配要求：包含 weak 匹配，同时降低分数阈值
+            if match_level in ("exact", "partial", "weak") and keyword_score >= 0.5:
                 final_score = self._compute_adaptive_score(
                     keyword_score, 0.0, match_level
                 )
@@ -376,8 +376,16 @@ class OptimizedAudioSearcher(AudioSearcher):
         # 获取扩展查询词
         expanded_queries = self._text_processor.expand_query(query)
 
+        # 如果扩展结果很少（只有原始查询），也尝试使用扩展词本身
+        # 这样可以搜索文件名包含查询词的文件
         if len(expanded_queries) <= 1:
-            return []
+            # 尝试使用原始查询的分词结果进行搜索
+            tokens = self._text_processor.tokenize(query)
+            if tokens and len(tokens) > 1:
+                expanded_queries.extend(tokens)
+            else:
+                # 如果无法扩展，至少对原始查询进行文件名匹配
+                return []
 
         all_files = self._get_all_files(filters)
         results = []
@@ -386,7 +394,11 @@ class OptimizedAudioSearcher(AudioSearcher):
         processed_paths = set()
 
         for expanded_query in expanded_queries:
-            if expanded_query.lower() == query.lower():
+            # 对于英文单词等没有扩展的查询，也需要搜索原始查询
+            is_original = expanded_query.lower() == query.lower()
+            
+            # 如果有扩展词，跳过原始查询；如果没有扩展词，使用原始查询
+            if is_original and len(expanded_queries) > 1:
                 continue  # 跳过原始查询，避免与第1层重复
 
             for metadata in all_files:
@@ -401,8 +413,9 @@ class OptimizedAudioSearcher(AudioSearcher):
                     expanded_query, filename, metadata
                 )
 
-                # 只接受弱匹配以上的级别
-                if match_level in ("partial", "weak") and keyword_score >= 0.5:
+                # 对于无扩展的查询，降低匹配要求
+                min_score = 0.3 if len(expanded_queries) <= 1 else 0.5
+                if match_level in ("exact", "partial", "weak") and keyword_score >= min_score:
                     processed_paths.add(file_path)
                     final_score = self._compute_adaptive_score(
                         keyword_score, 0.0, match_level
@@ -431,14 +444,22 @@ class OptimizedAudioSearcher(AudioSearcher):
     def _semantic_search(
         self,
         query_embedding: np.ndarray,
-        top_k: int,
-        min_similarity: float,
+        query: str = "",
+        top_k: int = 100,
+        min_similarity: float = 0.0,
         filters: Optional[Dict[str, Any]] = None
     ) -> List[SearchResult]:
         """
         第3层：纯语义搜索（CLAP embedding）
 
         作为兜底，确保任何查询都有语义相关的结果
+
+        Args:
+            query_embedding: 查询的 embedding 向量
+            query: 原始查询文本（用于文件名匹配）
+            top_k: 返回结果数量
+            min_similarity: 最小相似度阈值
+            filters: 过滤条件
         """
         where_clause = filters if filters else None
 
@@ -462,19 +483,29 @@ class OptimizedAudioSearcher(AudioSearcher):
                 # 使用高斯核函数转换距离为相似度
                 semantic_sim = np.exp(-(distance ** 2) / 2.0)
 
-                # 不在这里过滤，留给自适应评分处理
                 metadata = metadatas[i]
                 filename = metadata.get("filename", "")
 
-                # 计算关键词分数
-                keyword_score, match_level = self._keyword_match_score(
-                    "", filename, metadata
-                )
+                # 计算文件名匹配分数（基于原始查询）
+                keyword_score = 0.0
+                match_level = "none"
+                if query:
+                    keyword_score, match_level = self._keyword_match_score(
+                        query, filename, metadata
+                    )
 
-                # 使用自适应评分，无关键词匹配时使用纯语义分数
-                final_score = self._compute_adaptive_score(
-                    keyword_score, semantic_sim, "none"
-                )
+                # 综合语义相似度和文件名匹配
+                if match_level in ("exact", "partial", "weak"):
+                    # 如果有文件名匹配，提高分数
+                    if match_level == "exact":
+                        final_score = 0.95 + min(keyword_score * 0.05, 0.05)
+                    elif match_level == "partial":
+                        final_score = 0.70 + min(keyword_score * 0.20, 0.20)
+                    else:  # weak
+                        final_score = keyword_score * 0.5 + semantic_sim * 0.5
+                else:
+                    # 纯语义搜索
+                    final_score = semantic_sim
 
                 if final_score >= min_similarity:
                     semantic_results.append(SearchResult(
@@ -485,8 +516,8 @@ class OptimizedAudioSearcher(AudioSearcher):
                         format=metadata.get("format", ""),
                         metadata={
                             **metadata,
-                            "match_level": "none",
-                            "keyword_score": 0.0,
+                            "match_level": match_level,
+                            "keyword_score": keyword_score,
                             "semantic_score": semantic_sim,
                             "search_layer": 3,
                             "distance": distance
@@ -552,7 +583,7 @@ class OptimizedAudioSearcher(AudioSearcher):
         3. 第3层：纯语义搜索（兜底）
 
         Args:
-            query: 查询文本
+            query: 查询文本（原始查询，用于文件名匹配）
             query_embedding: 查询的 embedding 向量
             top_k: 返回结果数量
             min_similarity: 最小相似度阈值
@@ -563,19 +594,19 @@ class OptimizedAudioSearcher(AudioSearcher):
         """
         all_results = []
 
-        # 第1层：精确关键词搜索
+        # 第1层：精确关键词搜索（使用原始查询）
         exact_results = self._exact_keyword_search(query, filters)
         all_results.extend(exact_results)
         logger.debug(f"第1层(精确关键词): 找到 {len(exact_results)} 个结果")
 
-        # 第2层：分词扩展搜索
+        # 第2层：分词扩展搜索（使用原始查询，让它内部扩展）
         expanded_results = self._expanded_keyword_search(query, filters)
         all_results.extend(expanded_results)
         logger.debug(f"第2层(分词扩展): 找到 {len(expanded_results)} 个结果")
 
-        # 第3层：语义搜索（兜底）
+        # 第3层：语义搜索（兜底，使用语义相似度）
         semantic_results = self._semantic_search(
-            query_embedding, top_k, min_similarity, filters
+            query_embedding, query, top_k, min_similarity, filters
         )
         all_results.extend(semantic_results)
         logger.debug(f"第3层(语义搜索): 找到 {len(semantic_results)} 个结果")
