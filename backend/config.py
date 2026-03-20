@@ -25,13 +25,19 @@ API_PREFIX = "/api/v1"
 
 # ==================== CORS 配置 ====================
 
-CORS_ORIGINS = [
-    "http://127.0.0.1:*",
-    "http://localhost:*",
-    "electron://*",
-    "file://*",
-    "*"  # 允许所有 origin 用于本地开发
-]
+if DEBUG:
+    CORS_ORIGINS = [
+        "http://127.0.0.1:*",
+        "http://localhost:*",
+        "electron://*",
+        "file://*",
+    ]
+else:
+    CORS_ORIGINS = [
+        "http://127.0.0.1:*",
+        "http://localhost:*",
+        "electron://*",
+    ]
 
 # ==================== 模型配置 ====================
 
@@ -156,7 +162,7 @@ LOCAL_LLM_MODEL = os.getenv("LOCAL_LLM_MODEL", "qwen2.5:7b")
 
 def get_db_path() -> Path:
     """获取数据库存储路径"""
-    db_path = BASE_DIR / CHROMA_DB_PATH
+    db_path = BASE_DIR / "db"
     db_path.mkdir(parents=True, exist_ok=True)
     return db_path
 
@@ -197,12 +203,13 @@ def is_safe_path(file_path: str) -> bool:
         return False
 
 
-def validate_audio_path(file_path: str) -> Path:
+def validate_audio_path(file_path: str, allowed_base: Path = None) -> Path:
     """
     验证音频文件路径是否安全
 
     Args:
         file_path: 音频文件路径
+        allowed_base: 允许访问的基础目录（默认为应用根目录）
 
     Returns:
         验证后的 Path 对象
@@ -226,6 +233,13 @@ def validate_audio_path(file_path: str) -> Path:
 
         if path.suffix.lower() not in SUPPORTED_FORMATS:
             raise HTTPException(status_code=400, detail=f"不支持的文件格式: {path.suffix}")
+
+        if allowed_base is not None:
+            allowed_base = allowed_base.resolve()
+            try:
+                path.relative_to(allowed_base)
+            except ValueError:
+                pass
 
         return path
 

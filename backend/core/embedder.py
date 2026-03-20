@@ -31,6 +31,7 @@ CLAP 音频-文本嵌入模型封装
 import logging
 import os
 import socket
+import threading
 import torch
 import numpy as np
 from typing import Optional
@@ -65,18 +66,16 @@ class CLIPEmbedder:
 
     @contextmanager
     def _timeout_context(self, seconds: int = 30):
-        """设置模型加载超时"""
-        import signal
-        def timeout_handler(signum, frame):
+        """设置模型加载超时（跨平台兼容）"""
+        def timeout_handler():
             raise TimeoutError(f"模型加载超时 ({seconds}秒)")
 
-        old_handler = signal.signal(signal.SIGALRM, timeout_handler)
-        signal.alarm(seconds)
+        timer = threading.Timer(seconds, timeout_handler)
+        timer.start()
         try:
             yield
         finally:
-            signal.alarm(0)
-            signal.signal(signal.SIGALRM, old_handler)
+            timer.cancel()
 
     def __init__(self):
         if self._initialized:

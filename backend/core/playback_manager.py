@@ -112,14 +112,16 @@ class PlaybackManager:
                     "duration": round(duration, 3),
                     "is_playing": is_playing
                 }
-                # 如果有事件循环，使用 call_soon_threadsafe
-                if self._event_loop and self._event_loop.is_running():
-                    self._event_loop.call_soon_threadsafe(self._state_callback, state)
+                event_loop = self._event_loop
+                if event_loop is not None and event_loop.is_running():
+                    event_loop.call_soon_threadsafe(self._state_callback, state)
                 else:
-                    # 同步调用
-                    self._state_callback(state)
+                    try:
+                        self._state_callback(state)
+                    except Exception as callback_err:
+                        logger.error(f"状态回调执行失败: {callback_err}")
             except Exception as e:
-                logger.error(f"状态回调执行失败: {e}")
+                logger.error(f"状态通知失败: {e}")
 
     def _audio_callback(self, outdata, frames, time_info, status):
         """

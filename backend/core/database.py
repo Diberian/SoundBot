@@ -19,6 +19,8 @@ SQLite 持久化层：存储音频文件元数据和波形峰值数据。
 
 import sqlite3
 import json
+import os
+import shutil
 import threading
 from pathlib import Path
 from typing import List, Optional, Dict, Any
@@ -184,32 +186,31 @@ class DatabaseManager:
 
     def _get_connection(self) -> sqlite3.Connection:
         """获取线程局部的数据库连接"""
-        if not hasattr(self._local, 'conn') or self._local.conn is None:
+        conn = getattr(self._local, 'conn', None)
+        if conn is None:
             try:
-                self._local.conn = sqlite3.connect(
+                conn = sqlite3.connect(
                     self.db_path,
                     check_same_thread=False,
                     timeout=30.0
                 )
-                self._local.conn.row_factory = sqlite3.Row
-                # 禁用 WAL 模式避免 acquire_write 错误
-                # 使用 DELETE 模式更稳定
-                self._local.conn.execute("PRAGMA journal_mode=DELETE")
-                self._local.conn.execute("PRAGMA synchronous=NORMAL")
+                conn.row_factory = sqlite3.Row
+                conn.execute("PRAGMA journal_mode=DELETE")
+                conn.execute("PRAGMA synchronous=NORMAL")
+                self._local.conn = conn
             except sqlite3.Error as e:
                 _get_logger().error(f"数据库连接失败: {e}")
-                # 尝试修复数据库
                 self._repair_database()
-                # 重新连接
-                self._local.conn = sqlite3.connect(
+                conn = sqlite3.connect(
                     self.db_path,
                     check_same_thread=False,
                     timeout=30.0
                 )
-                self._local.conn.row_factory = sqlite3.Row
-                self._local.conn.execute("PRAGMA journal_mode=DELETE")
-                self._local.conn.execute("PRAGMA synchronous=NORMAL")
-        return self._local.conn
+                conn.row_factory = sqlite3.Row
+                conn.execute("PRAGMA journal_mode=DELETE")
+                conn.execute("PRAGMA synchronous=NORMAL")
+                self._local.conn = conn
+        return conn
 
     def _repair_database(self):
         """尝试修复损坏的数据库"""
@@ -264,9 +265,14 @@ class DatabaseManager:
 
     def _migrate_db(self, cursor, projects_table_exists):
         """迁移现有数据库到新版结构"""
+        backup_path = None
         try:
             _get_logger().info("开始数据库迁移...")
-            
+
+            backup_path = f"{self.db_path}.backup"
+            shutil.copy2(self.db_path, backup_path)
+            _get_logger().info(f"数据库备份已创建: {backup_path}")
+
             # 1. 检查 files 表是否有 project_id 列
             cursor.execute("PRAGMA table_info(files)")
             columns = [row[1] for row in cursor.fetchall()]
@@ -358,10 +364,21 @@ class DatabaseManager:
                 cursor.execute("CREATE INDEX idx_imported_mappings_user_folder ON imported_folder_mappings(user_folder_id)")
 
             _get_logger().info("数据库迁移完成")
+            if backup_path and os.path.exists(backup_path):
+                os.remove(backup_path)
+                _get_logger().info("数据库备份已删除")
         except Exception as e:
             _get_logger().error(f"数据库迁移失败: {e}")
             import traceback
             _get_logger().error(traceback.format_exc())
+            if backup_path and os.path.exists(backup_path):
+                try:
+                    shutil.copy2(backup_path, self.db_path)
+                    _get_logger().info("数据库已恢复备份")
+                    os.remove(backup_path)
+                    _get_logger().info("临时备份文件已删除")
+                except Exception as restore_err:
+                    _get_logger().error(f"恢复备份失败: {restore_err}")
             raise
 
     def _row_to_record(self, row: sqlite3.Row) -> AudioFileRecord:
