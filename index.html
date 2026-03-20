@@ -3453,11 +3453,9 @@
                             </div>
                             <div class="flex items-center gap-2">
                                 ${isCurrent ? '<span class="text-xs px-2 py-1 rounded-full bg-green-500/20 text-green-600 dark:text-green-400">当前</span>' : ''}
-                                ${!isDefault ? `
-                                    <button class="delete-project-btn p-1.5 rounded-md hover:bg-red-500/20 hover:text-red-500 transition-colors" data-project-id="${project.id}" data-project-name="${project.name}">
-                                        <i data-lucide="trash-2" class="w-4 h-4"></i>
-                                    </button>
-                                ` : ''}
+                                <button class="delete-project-btn p-1.5 rounded-md hover:bg-red-500/20 hover:text-red-500 transition-colors" data-project-id="${project.id}" data-project-name="${project.name}" title="删除工程">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
                             </div>
                         `;
 

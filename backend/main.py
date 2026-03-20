@@ -2358,10 +2358,6 @@ async def delete_project(project_id: str):
         if not existing:
             raise HTTPException(status_code=404, detail="工程不存在")
 
-        # 不能删除默认工程
-        if project_id == 'default':
-            raise HTTPException(status_code=400, detail="不能删除默认工程")
-
         # 检查是否是当前工程
         current_project_id = getattr(config, 'CURRENT_PROJECT_ID', None)
         is_current_project = (current_project_id == project_id)
