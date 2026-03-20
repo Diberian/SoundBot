@@ -1456,42 +1456,9 @@ async def get_waveform(path: str = Query(..., description="音频文件路径"))
 
 
 # ==================== 音频文件服务 ====================
-
-@app.get("/api/v1/audio/{file_path:path}")
-async def get_audio(file_path: str = PathParam(..., description="音频文件路径")):
-    """
-    提供音频文件播放服务
-
-    支持范围请求（用于前端波形显示和流式播放）
-    """
-    import urllib.parse
-    file_path = urllib.parse.unquote(file_path)
-
-    audio_file = config.validate_audio_path(file_path)
-
-    # 获取文件大小
-    file_size = audio_file.stat().st_size
-
-    # 获取 MIME 类型
-    mime_types = {
-        '.wav': 'audio/wav',
-        '.mp3': 'audio/mpeg',
-        '.flac': 'audio/flac',
-        '.aiff': 'audio/aiff',
-        '.aif': 'audio/aiff',
-        '.ogg': 'audio/ogg',
-        '.m4a': 'audio/mp4',
-        '.aac': 'audio/aac'
-    }
-    mime_type = mime_types.get(audio_file.suffix.lower(), 'application/octet-stream')
-
-    # 创建文件响应，支持范围请求
-    return FileResponse(
-        path=str(audio_file),
-        media_type=mime_type,
-        filename=audio_file.name
-    )
-
+# 注意：具体子路由必须在通用路由 /api/v1/audio/{file_path} 之前定义
+# 否则 FastAPI 会错误匹配，例如 /api/v1/audio/stream/test.wav
+# 会被匹配为 file_path="stream/test.wav" 而不是调用 stream 端点
 
 @app.get("/api/v1/audio/decoded/{file_path:path}")
 async def get_decoded_audio(file_path: str):
@@ -1723,6 +1690,44 @@ async def stream_audio_from_cache(file_path: str):
     except Exception as e:
         logger.error(f"生成 WAV 失败 {file_path}: {e}")
         raise HTTPException(status_code=500, detail=f"生成音频失败: {str(e)}")
+
+
+# ==================== 通用音频文件服务（必须放在子路由之后）====================
+
+@app.get("/api/v1/audio/{file_path:path}")
+async def get_audio(file_path: str = PathParam(..., description="音频文件路径")):
+    """
+    提供音频文件播放服务（通用路由，放在子路由之后）
+
+    支持范围请求（用于前端波形显示和流式播放）
+    """
+    import urllib.parse
+    file_path = urllib.parse.unquote(file_path)
+
+    audio_file = config.validate_audio_path(file_path)
+
+    # 获取文件大小
+    file_size = audio_file.stat().st_size
+
+    # 获取 MIME 类型
+    mime_types = {
+        '.wav': 'audio/wav',
+        '.mp3': 'audio/mpeg',
+        '.flac': 'audio/flac',
+        '.aiff': 'audio/aiff',
+        '.aif': 'audio/aiff',
+        '.ogg': 'audio/ogg',
+        '.m4a': 'audio/mp4',
+        '.aac': 'audio/aac'
+    }
+    mime_type = mime_types.get(audio_file.suffix.lower(), 'application/octet-stream')
+
+    # 创建文件响应，支持范围请求
+    return FileResponse(
+        path=str(audio_file),
+        media_type=mime_type,
+        filename=audio_file.name
+    )
 
 
 # ==================== 索引状态 ====================
