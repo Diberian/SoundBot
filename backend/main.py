@@ -357,6 +357,33 @@ async def _scan_and_import_task(
             client_id, task_id, folder_structure.dict()
         )
 
+        # 创建导入文件夹映射记录（未分类）
+        try:
+            from core.scanner import FolderNode
+
+            def collect_folder_paths(node: FolderNode, paths: list):
+                """递归收集所有文件夹路径"""
+                if node.path:
+                    paths.append(node.path)
+                for child in node.children:
+                    collect_folder_paths(child, paths)
+
+            folder_paths = []
+            collect_folder_paths(folder_structure, folder_paths)
+
+            # 为每个文件夹创建映射记录（未分类，user_folder_id 为 None）
+            for folder_path in folder_paths:
+                db_manager.add_imported_folder_mapping(
+                    project_id=config.CURRENT_PROJECT_ID,
+                    folder_path=folder_path,
+                    user_folder_id=None,
+                    folder_name=Path(folder_path).name
+                )
+
+            logger.info(f"[SCAN_TASK] 创建了 {len(folder_paths)} 个文件夹映射记录")
+        except Exception as e:
+            logger.warning(f"[SCAN_TASK] 创建文件夹映射记录失败: {e}")
+
         if total == 0:
             write_log('warning', '未找到音频文件')
             await ws_manager.send_scan_complete(

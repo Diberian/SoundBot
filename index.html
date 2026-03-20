@@ -1394,26 +1394,58 @@
 
         // 显示移动到文件夹菜单
         function showMoveToFolderMenu(event, folder) {
-            const options = userFolders.map(f => ({
-                label: f.name,
-                action: () => updateFolderMapping(folder.fullPath, f.id)
-            }));
-
-            if (options.length === 0) {
+            if (userFolders.length === 0) {
                 showNotification('请先创建文件夹', 'info');
                 return;
             }
 
-            // 简单的选择对话框
-            const folderNames = options.map((o, i) => `${i + 1}. ${o.label}`).join('\n');
-            const choice = prompt(`移动到文件夹:\n${folderNames}\n\n输入序号:`);
+            // 创建右键菜单
+            const menu = document.createElement('div');
+            menu.id = 'contextMenu';
+            menu.className = 'fixed z-[200] rounded-lg shadow-xl border py-1 w-48';
+            menu.style.backgroundColor = 'var(--bg-secondary)';
+            menu.style.borderColor = 'var(--border-color)';
+            menu.style.left = `${event.clientX}px`;
+            menu.style.top = `${event.clientY}px`;
 
-            if (choice) {
-                const index = parseInt(choice) - 1;
-                if (index >= 0 && index < options.length) {
-                    options[index].action();
+            // 菜单标题
+            menu.innerHTML = `
+                <div class="px-3 py-2 text-xs font-medium opacity-60 border-b" style="border-color: var(--border-color);">
+                    移动到文件夹
+                </div>
+            `;
+
+            // 添加文件夹选项
+            userFolders.forEach(f => {
+                const item = document.createElement('button');
+                item.className = 'w-full px-3 py-2 text-sm text-left hover:bg-white/5 flex items-center gap-2 transition-colors';
+                item.innerHTML = `
+                    <div class="w-3 h-3 rounded-full" style="background-color: ${f.color || '#3b82f6'};"></div>
+                    <span class="truncate">${f.name}</span>
+                `;
+                item.addEventListener('click', () => {
+                    updateFolderMapping(folder.fullPath, f.id);
+                    document.body.removeChild(menu);
+                });
+                menu.appendChild(item);
+            });
+
+            // 点击其他地方关闭菜单
+            const closeMenu = (e) => {
+                if (!menu.contains(e.target)) {
+                    if (menu.parentNode) {
+                        document.body.removeChild(menu);
+                    }
+                    document.removeEventListener('click', closeMenu);
                 }
-            }
+            };
+
+            // 延迟绑定点击事件，避免立即触发
+            setTimeout(() => {
+                document.addEventListener('click', closeMenu);
+            }, 100);
+
+            document.body.appendChild(menu);
         }
 
         // ==================== CATEGORY TREE ====================
