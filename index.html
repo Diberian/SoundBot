@@ -2546,39 +2546,72 @@
         }
 
         // ==================== PLAYBACK ====================
+        let playPromise = null; // 跟踪播放 Promise
+
         function startPlayback() {
             if (!currentSound) return;
-            
+
             if (audioPlayer && audioPlayer.src) {
                 // 无选区播放，重置播放上下文
                 playbackStartedInSelection = false;
                 playbackStartTime = audioPlayer.currentTime;
-                
-                audioPlayer.play().catch(error => {
-                    console.error('播放失败:', error);
-                    showNotification('播放失败: ' + error.message, 'error');
-                });
-                isPlaying = true;
-                startPlaybackAnimation(); // 启动毫秒级动画更新
+
+                // 保存 play() 返回的 Promise，防止被 pause() 中断时报错
+                playPromise = audioPlayer.play();
+                playPromise
+                    .then(() => {
+                        isPlaying = true;
+                        startPlaybackAnimation(); // 启动毫秒级动画更新
+                        updatePlaybackUI();
+                        updatePlayButtonState();
+                    })
+                    .catch(error => {
+                        // 只有当不是被主动暂停时才报错
+                        if (error.name !== 'AbortError') {
+                            console.error('播放失败:', error);
+                            showNotification('播放失败: ' + error.message, 'error');
+                        }
+                        isPlaying = false;
+                        updatePlaybackUI();
+                        updatePlayButtonState();
+                    })
+                    .finally(() => {
+                        playPromise = null;
+                    });
             } else {
                 // 如果没有音频源，重新加载
                 loadAndPlaySound(currentSound);
             }
-            
-            updatePlaybackUI();
-            // 只更新播放按钮状态，不重绘整个列表
-            updatePlayButtonState();
         }
-        
+
         function pausePlayback() {
-            if (audioPlayer) {
-                audioPlayer.pause();
+            // 如果有正在进行的播放 Promise，等待它完成再暂停
+            if (playPromise) {
+                playPromise
+                    .then(() => {
+                        if (audioPlayer) {
+                            audioPlayer.pause();
+                        }
+                    })
+                    .catch(() => {
+                        // Promise 被拒绝，说明播放被中断，无需处理
+                    })
+                    .finally(() => {
+                        isPlaying = false;
+                        stopPlaybackAnimation(); // 停止动画更新
+                        updatePlaybackUI();
+                        updatePlayButtonState();
+                        playPromise = null;
+                    });
+            } else {
+                if (audioPlayer) {
+                    audioPlayer.pause();
+                }
+                isPlaying = false;
+                stopPlaybackAnimation(); // 停止动画更新
+                updatePlaybackUI();
+                updatePlayButtonState();
             }
-            isPlaying = false;
-            stopPlaybackAnimation(); // 停止动画更新
-            updatePlaybackUI();
-            // 只更新播放按钮状态，不重绘整个列表
-            updatePlayButtonState();
         }
         
         // 仅更新播放按钮状态，避免重绘整个列表导致波形闪烁
