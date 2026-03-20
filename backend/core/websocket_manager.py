@@ -104,7 +104,8 @@ class ConnectionManager:
         scanned: int,
         total: int,
         current_file: str = "",
-        status: str = "scanning"
+        status: str = "scanning",
+        progress: Optional[float] = None
     ):
         """
         发送扫描进度
@@ -116,8 +117,10 @@ class ConnectionManager:
             total: 总数
             current_file: 当前处理的文件名
             status: 状态
+            progress: 自定义进度值（0-100），None 时自动计算
         """
-        progress = round(scanned / total * 100, 1) if total > 0 else 0
+        if progress is None:
+            progress = round(scanned / total * 100, 1) if total > 0 else 0
         message = {
             "type": "scan_progress",
             "task_id": task_id,

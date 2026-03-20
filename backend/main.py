@@ -817,6 +817,7 @@ async def _scan_and_import_task(
         # 第二步：逐个处理文件
         added = 0
         skipped = 0
+        indexed = 0
 
         for i, audio_file in enumerate(audio_files):
             # 检查是否取消
@@ -830,16 +831,24 @@ async def _scan_and_import_task(
                 return
 
             current_file = Path(audio_file.path).name
+            progress_pct = int((i / total) * 100)
 
-            # 发送进度
+            # 发送进度 - 扫描阶段 (0-40%)
             await ws_manager.send_scan_progress(
-                client_id, task_id, i, total, current_file, "processing"
+                client_id, task_id, i, total, current_file, "scanning",
+                progress=int(progress_pct * 0.4)
             )
 
             # 检查是否已存在
             if db_manager.file_exists(audio_file.path):
                 skipped += 1
                 continue
+
+            # 发送进度 - 分析阶段 (40-70%)
+            await ws_manager.send_scan_progress(
+                client_id, task_id, i, total, current_file, "analyzing",
+                progress=int(40 + progress_pct * 0.3)
+            )
 
             # 计算波形峰值
             peaks_json = None
@@ -863,6 +872,12 @@ async def _scan_and_import_task(
                 logger.warning(f"计算波形失败 {audio_file.path}: {e}")
                 write_log('warning', '计算波形失败', {'path': audio_file.path, 'error': str(e)})
 
+            # 发送进度 - 保存到数据库阶段 (70-85%)
+            await ws_manager.send_scan_progress(
+                client_id, task_id, i, total, current_file, "saving",
+                progress=int(70 + progress_pct * 0.15)
+            )
+
             # 写入数据库（使用当前工程ID）
             record = AudioFileRecord(
                 path=audio_file.path,
@@ -880,6 +895,12 @@ async def _scan_and_import_task(
                 if added % 10 == 0:  # 每10个文件记录一次
                     write_log('info', '已添加文件', {'added': added, 'current': current_file})
 
+                # 发送进度 - 向量索引阶段 (85-100%)
+                await ws_manager.send_scan_progress(
+                    client_id, task_id, i, total, current_file, "indexing",
+                    progress=int(85 + progress_pct * 0.15)
+                )
+
                 try:
                     if is_embedder_available():
                         indexer = get_indexer()
@@ -891,6 +912,7 @@ async def _scan_and_import_task(
                             "format": audio_file.format,
                             "size": audio_file.size
                         })
+                        indexed += 1
                 except Exception as e:
                     logger.warning(f"生成语义索引失败 {audio_file.path}: {e}")
 

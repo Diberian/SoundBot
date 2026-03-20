@@ -4011,8 +4011,19 @@
             if (data.progress !== undefined) {
                 progressBar.style.width = `${data.progress}%`;
             }
+
+            // 根据状态显示不同的进度文本
+            const statusMap = {
+                'scanning': '扫描中',
+                'analyzing': '分析波形',
+                'saving': '保存数据',
+                'indexing': '向量索引',
+                'processing': '处理中'
+            };
+            const statusText = statusMap[data.status] || '处理中';
+
             if (data.scanned !== undefined && data.total !== undefined) {
-                progressText.textContent = `已扫描 ${data.scanned} / ${data.total} 个文件 (${data.progress || 0}%)`;
+                progressText.textContent = `${statusText}: ${data.scanned} / ${data.total} (${data.progress || 0}%)`;
             }
             if (data.current_file) {
                 currentFileText.textContent = data.current_file;
