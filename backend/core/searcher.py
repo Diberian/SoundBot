@@ -116,17 +116,17 @@ class AudioSearcher:
             metadatas = results["metadatas"][0]
             
             for i, file_id in enumerate(ids):
-                # 计算相似度（ChromaDB 使用距离，越小越相似）
-                # 转换为相似度：1 - distance
+                # 计算相似度（ChromaDB 使用欧氏距离，越小越相似）
+                # 对于归一化的向量，欧氏距离与余弦相似度的关系：cos_sim = 1 - dist^2 / 2
                 distance = distances[i]
-                similarity = 1.0 - distance
-                
+                similarity = 1.0 - (distance ** 2) / 2.0
+
                 # 过滤低相似度结果
                 if similarity < min_similarity:
                     continue
-                
+
                 metadata = metadatas[i]
-                
+
                 search_results.append(SearchResult(
                     file_path=metadata.get("file_path", ""),
                     filename=metadata.get("filename", ""),
@@ -183,14 +183,15 @@ class AudioSearcher:
             metadatas = results["metadatas"][0]
             
             for i, file_id in enumerate(ids):
+                # 对于归一化的向量，欧氏距离与余弦相似度的关系：cos_sim = 1 - dist^2 / 2
                 distance = distances[i]
-                similarity = 1.0 - distance
-                
+                similarity = 1.0 - (distance ** 2) / 2.0
+
                 if similarity < min_similarity:
                     continue
-                
+
                 metadata = metadatas[i]
-                
+
                 search_results.append(SearchResult(
                     file_path=metadata.get("file_path", ""),
                     filename=metadata.get("filename", ""),
@@ -199,7 +200,7 @@ class AudioSearcher:
                     format=metadata.get("format", ""),
                     metadata=metadata
                 ))
-        
+
         return search_results
 
     def search_audio_to_audio(
