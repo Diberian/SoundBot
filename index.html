@@ -477,6 +477,88 @@
         let playbackStartTime = 0;               // 播放开始时的时间（秒）
         let lastStoppedAtSelectionEnd = false;   // 上一次播放是否因为到达选区结束而停止
 
+        // ==================== 后端播放状态 WebSocket ====================
+        let playbackWebSocket = null;
+        let playbackWsClientId = null;
+        let useBackendPlayback = false;  // 是否使用后端流式播放
+
+        // 连接到后端播放状态 WebSocket
+        function connectPlaybackWebSocket(clientId) {
+            if (playbackWebSocket && playbackWebSocket.readyState === WebSocket.OPEN) {
+                return;
+            }
+
+            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//127.0.0.1:8000/ws/playback/${clientId}`;
+            console.log('[Playback WS] 正在连接:', wsUrl);
+
+            try {
+                playbackWebSocket = new WebSocket(wsUrl);
+
+                playbackWebSocket.onopen = () => {
+                    console.log('[Playback WS] 连接已建立');
+                    // 发送心跳
+                    playbackWebSocket.send(JSON.stringify({type: 'ping'}));
+                };
+
+                playbackWebSocket.onmessage = (event) => {
+                    try {
+                        const state = JSON.parse(event.data);
+                        // 忽略心跳响应
+                        if (state.type === 'pong') return;
+                        console.log('[Playback WS] 收到状态:', state);
+                        handlePlaybackStateUpdate(state);
+                    } catch (e) {
+                        console.error('[Playback WS] 解析消息失败:', e);
+                    }
+                };
+
+                playbackWebSocket.onerror = (error) => {
+                    console.error('[Playback WS] 连接错误:', error);
+                };
+
+                playbackWebSocket.onclose = () => {
+                    console.log('[Playback WS] 连接已关闭');
+                    playbackWebSocket = null;
+                };
+            } catch (error) {
+                console.error('[Playback WS] 创建连接失败:', error);
+            }
+        }
+
+        // 处理后端播放状态更新
+        function handlePlaybackStateUpdate(state) {
+            if (!state || typeof state.position !== 'number') return;
+
+            // 更新播放进度
+            playbackProgress = Math.round(state.position * 1000);
+
+            // 更新播放状态
+            const wasPlaying = isPlaying;
+            isPlaying = state.is_playing;
+
+            // 更新 WaveSurfer 游标位置
+            if (waveSurfer && !waveSurfer.isPlaying?.()) {
+                waveSurfer.seekTo(state.position / state.duration);
+            }
+
+            // 更新播放 UI
+            updatePlaybackUI();
+
+            // 如果播放状态发生变化，更新播放按钮
+            if (wasPlaying !== isPlaying) {
+                updatePlayButtonState();
+            }
+        }
+
+        // 断开播放 WebSocket
+        function disconnectPlaybackWebSocket() {
+            if (playbackWebSocket) {
+                playbackWebSocket.close();
+                playbackWebSocket = null;
+            }
+        }
+
         // ==================== WAVEFORM ZOOM STATE ====================
         let waveformZoomLevel = 1.0;           // 当前缩放级别 (1.0 = 100%)
         let waveformScrollOffset = 0;          // 水平滚动偏移量
@@ -2189,11 +2271,142 @@
         }
 
         function playSound(sound) {
+            // 优先使用后端流式播放
+            if (useBackendPlayback) {
+                backendPlaySound(sound);
+                return;
+            }
+
+            // 使用前端 HTML5 Audio 播放
             if (currentSound && currentSound.id === sound.id && isPlaying) {
                 pausePlayback();
             } else {
                 currentSound = sound;
                 loadAndPlaySound(sound);
+            }
+        }
+
+        // 后端流式播放音效
+        async function backendPlaySound(sound) {
+            if (!sound.filePath) {
+                showNotification('无法播放：缺少文件路径', 'error');
+                return;
+            }
+
+            // 如果当前正在播放同一个音效，切换暂停/继续
+            if (currentSound && currentSound.id === sound.id) {
+                if (isPlaying) {
+                    // 暂停
+                    await backendPause();
+                } else {
+                    // 继续播放
+                    await backendResume();
+                }
+                return;
+            }
+
+            // 播放新音效
+            currentSound = sound;
+
+            try {
+                // 停止之前的播放
+                await backendStop();
+
+                // 调用后端 API 开始播放
+                const response = await fetch('http://127.0.0.1:8000/api/play', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        path: sound.filePath,
+                        start: 0.0
+                    })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || '播放失败');
+                }
+
+                const result = await response.json();
+                console.log('[Backend Play] 开始播放:', result);
+
+                isPlaying = true;
+                playbackProgress = 0;
+                currentSound.duration = result.duration;
+
+                updatePlaybackUI();
+                updatePlayButtonState();
+
+                showNotification(`正在播放: ${sound.name}`, 'info');
+            } catch (error) {
+                console.error('[Backend Play] 播放失败:', error);
+                showNotification('播放失败: ' + error.message, 'error');
+
+                // 回退到前端播放
+                console.log('[Backend Play] 回退到前端播放');
+                useBackendPlayback = false;
+                loadAndPlaySound(sound);
+            }
+        }
+
+        // 后端暂停
+        async function backendPause() {
+            try {
+                const response = await fetch('http://127.0.0.1:8000/api/pause', {
+                    method: 'POST'
+                });
+                if (response.ok) {
+                    isPlaying = false;
+                    updatePlaybackUI();
+                    updatePlayButtonState();
+                }
+            } catch (error) {
+                console.error('[Backend Play] 暂停失败:', error);
+            }
+        }
+
+        // 后端继续播放
+        async function backendResume() {
+            try {
+                const response = await fetch('http://127.0.0.1:8000/api/resume', {
+                    method: 'POST'
+                });
+                if (response.ok) {
+                    isPlaying = true;
+                    updatePlaybackUI();
+                    updatePlayButtonState();
+                }
+            } catch (error) {
+                console.error('[Backend Play] 继续播放失败:', error);
+            }
+        }
+
+        // 后端停止
+        async function backendStop() {
+            try {
+                await fetch('http://127.0.0.1:8000/api/stop', {
+                    method: 'POST'
+                });
+                isPlaying = false;
+                playbackProgress = 0;
+                updatePlaybackUI();
+            } catch (error) {
+                console.error('[Backend Play] 停止失败:', error);
+            }
+        }
+
+        // 后端跳转
+        async function backendSeek(position) {
+            try {
+                const response = await fetch('http://127.0.0.1:8000/api/seek', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({position: position})
+                });
+                return response.ok;
+            } catch (error) {
+                console.error('[Backend Play] 跳转失败:', error);
+                return false;
             }
         }
 
@@ -3879,6 +4092,10 @@
             updateCategoryData();
             renderSoundList();
             drawMainWaveform();
+
+            // 连接后端播放状态 WebSocket
+            playbackWsClientId = 'frontend-' + Date.now();
+            connectPlaybackWebSocket(playbackWsClientId);
 
             // 确保所有图标都被正确初始化
             lucide.createIcons();

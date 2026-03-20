@@ -379,3 +379,76 @@ def reset_ws_manager():
     """重置 WebSocket 管理器"""
     global _ws_manager
     _ws_manager = None
+
+
+# ========== 播放状态广播功能 ==========
+
+_playback_clients: Dict[str, Set[WebSocket]] = {}
+_playback_lock = asyncio.Lock()
+
+
+async def register_playback_client(client_id: str, websocket: WebSocket):
+    """
+    注册播放状态 WebSocket 客户端
+
+    Args:
+        client_id: 客户端标识
+        websocket: WebSocket 连接
+    """
+    async with _playback_lock:
+        if client_id not in _playback_clients:
+            _playback_clients[client_id] = set()
+        _playback_clients[client_id].add(websocket)
+        _get_logger().info(f"播放状态 WS 客户端注册: {client_id}")
+
+
+async def unregister_playback_client(client_id: str, websocket: WebSocket):
+    """
+    注销播放状态 WebSocket 客户端
+
+    Args:
+        client_id: 客户端标识
+        websocket: WebSocket 连接
+    """
+    async with _playback_lock:
+        if client_id in _playback_clients:
+            _playback_clients[client_id].discard(websocket)
+            if not _playback_clients[client_id]:
+                del _playback_clients[client_id]
+        _get_logger().info(f"播放状态 WS 客户端注销: {client_id}")
+
+
+async def broadcast_playback_state(
+    position: float,
+    duration: float,
+    is_playing: bool,
+    client_id: str = "default"
+):
+    """
+    广播播放状态到指定客户端
+
+    Args:
+        position: 当前播放位置（秒）
+        duration: 音频总时长（秒）
+        is_playing: 是否正在播放
+        client_id: 客户端标识
+    """
+    async with _playback_lock:
+        if client_id not in _playback_clients:
+            return
+
+        message = {
+            "position": round(position, 3),
+            "duration": round(duration, 3),
+            "is_playing": is_playing
+        }
+
+        disconnected = set()
+        for ws in _playback_clients[client_id]:
+            try:
+                await ws.send_json(message)
+            except Exception:
+                disconnected.add(ws)
+
+        for ws in disconnected:
+            _playback_clients[client_id].discard(ws)
