@@ -49,8 +49,29 @@ CLAP_DEVICE = "auto"  # auto/cpu/cuda/mps
 
 # ==================== 向量数据库配置 ====================
 
-# ChromaDB 存储路径
-CHROMA_DB_PATH = BASE_DIR / "db" / "chroma_store"
+# ChromaDB 基础存储路径
+CHROMA_DB_BASE_PATH = BASE_DIR / "db" / "chroma_projects"
+
+# 获取当前工程的 ChromaDB 路径
+def get_chroma_db_path(project_id: str = None) -> Path:
+    """
+    获取指定工程的 ChromaDB 存储路径
+
+    Args:
+        project_id: 工程ID，默认为当前激活的工程
+
+    Returns:
+        ChromaDB 路径
+    """
+    if project_id is None:
+        project_id = CURRENT_PROJECT_ID
+
+    db_path = CHROMA_DB_BASE_PATH / project_id
+    db_path.mkdir(parents=True, exist_ok=True)
+    return db_path
+
+# 向后兼容的变量（使用默认工程路径）
+CHROMA_DB_PATH = get_chroma_db_path("default")
 
 # ==================== 音频扫描配置 ====================
 

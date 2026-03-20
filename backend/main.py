@@ -1404,7 +1404,7 @@ async def update_project(project_id: str, request: schemas.UpdateProjectRequest)
 @app.delete("/api/v1/projects/{project_id}")
 async def delete_project(project_id: str):
     """
-    删除工程（会级联删除所有相关文件）
+    删除工程（会级联删除所有相关文件和向量数据库）
     """
     try:
         db_manager = get_db_manager()
@@ -1418,6 +1418,13 @@ async def delete_project(project_id: str):
         if project_id == 'default':
             raise HTTPException(status_code=400, detail="不能删除默认工程")
 
+        # 删除工程的向量数据库
+        from core.indexer import delete_project_index
+        index_deleted = delete_project_index(project_id)
+        if not index_deleted:
+            logger.warning(f"删除工程 {project_id} 的向量数据库失败，继续删除工程数据")
+
+        # 删除工程数据
         success = db_manager.delete_project(project_id)
 
         if not success:
@@ -1425,7 +1432,8 @@ async def delete_project(project_id: str):
 
         return {
             "success": True,
-            "message": "工程已删除"
+            "message": "工程已删除",
+            "index_deleted": index_deleted
         }
     except Exception as e:
         logger.error(f"删除工程失败: {e}")
@@ -1437,7 +1445,7 @@ async def switch_project(project_id: str):
     """
     切换到指定工程
 
-    会将工程添加到最近工程列表
+    会将工程添加到最近工程列表，同时切换向量数据库
     """
     try:
         db_manager = get_db_manager()
@@ -1457,11 +1465,24 @@ async def switch_project(project_id: str):
         if project.get('temp_dir'):
             config.TEMP_CLIP_DIR = project['temp_dir']
 
+        # 获取该工程的向量数据库信息
+        from core.indexer import get_indexer
+        from core.embedder import is_embedder_available
+
+        indexer = get_indexer(project_id)
+        indexed_count = indexer.get_indexed_count()
+
+        embedder_available = is_embedder_available()
+
         return {
             "success": True,
             "project_id": project_id,
             "project_name": project['name'],
-            "message": f"已切换到工程 '{project['name']}'"
+            "message": f"已切换到工程 '{project['name']}'",
+            "vector_db": {
+                "indexed_count": indexed_count,
+                "embedder_available": embedder_available
+            }
         }
     except Exception as e:
         logger.error(f"切换工程失败: {e}")

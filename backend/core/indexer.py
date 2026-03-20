@@ -400,19 +400,82 @@ class AudioIndexer:
         logger.info("索引已清空")
 
 
-# 全局单例
-_indexer: Optional[AudioIndexer] = None
+# 全局索引器实例字典（按工程ID存储）
+_indexers: Dict[str, AudioIndexer] = {}
 
 
-def get_indexer(persist_directory: Optional[str] = None) -> AudioIndexer:
-    """获取 Indexer 单例（延迟加载）"""
-    global _indexer
-    if _indexer is None:
-        _indexer = AudioIndexer(persist_directory=persist_directory)
-    return _indexer
+def get_indexer(project_id: str = None) -> AudioIndexer:
+    """
+    获取指定工程的 Indexer 实例
+
+    Args:
+        project_id: 工程ID，默认为当前激活的工程
+
+    Returns:
+        AudioIndexer 实例
+    """
+    import config
+
+    if project_id is None:
+        project_id = config.CURRENT_PROJECT_ID
+
+    global _indexers
+    if project_id not in _indexers:
+        persist_directory = str(config.get_chroma_db_path(project_id))
+        _indexers[project_id] = AudioIndexer(persist_directory=persist_directory)
+
+    return _indexers[project_id]
 
 
-def reset_indexer() -> None:
-    """重置 Indexer 单例（用于测试或重新初始化）"""
-    global _indexer
-    _indexer = None
+def reset_indexer(project_id: str = None) -> None:
+    """
+    重置指定工程的 Indexer 实例
+
+    Args:
+        project_id: 工程ID，默认为当前激活的工程
+    """
+    import config
+
+    if project_id is None:
+        project_id = config.CURRENT_PROJECT_ID
+
+    global _indexers
+    if project_id in _indexers:
+        del _indexers[project_id]
+
+
+def reset_all_indexers() -> None:
+    """重置所有工程的 Indexer 实例"""
+    global _indexers
+    _indexers = {}
+
+
+def delete_project_index(project_id: str) -> bool:
+    """
+    删除指定工程的向量数据库
+
+    Args:
+        project_id: 工程ID
+
+    Returns:
+        是否成功删除
+    """
+    import shutil
+    import config
+
+    try:
+        # 先重置该工程的索引器实例
+        reset_indexer(project_id)
+
+        # 删除向量数据库目录
+        db_path = config.get_chroma_db_path(project_id)
+        if db_path.exists():
+            shutil.rmtree(db_path)
+            logger.info(f"已删除工程 {project_id} 的向量数据库: {db_path}")
+            return True
+        else:
+            logger.warning(f"工程 {project_id} 的向量数据库不存在")
+            return True
+    except Exception as e:
+        logger.error(f"删除工程 {project_id} 的向量数据库失败: {e}")
+        return False
