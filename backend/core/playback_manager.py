@@ -80,6 +80,8 @@ class PlaybackManager:
         self._running = False
         self._pause_event = threading.Event()
         self._pause_event.set()
+        self._event_loop: Optional[asyncio.AbstractEventLoop] = None  # 存储事件循环引用
+        self._pending_state_updates: list = []  # 待处理的状态更新
 
         # 注册音频设备
         self._register_device_callback()
@@ -102,14 +104,20 @@ class PlaybackManager:
         self._state_callback = callback
 
     def _notify_state(self, position: float, duration: float, is_playing: bool):
-        """通知状态更新"""
+        """通知状态更新（线程安全）"""
         if self._state_callback:
             try:
-                self._state_callback({
+                state = {
                     "position": round(position, 3),
                     "duration": round(duration, 3),
                     "is_playing": is_playing
-                })
+                }
+                # 如果有事件循环，使用 call_soon_threadsafe
+                if self._event_loop and self._event_loop.is_running():
+                    self._event_loop.call_soon_threadsafe(self._state_callback, state)
+                else:
+                    # 同步调用
+                    self._state_callback(state)
             except Exception as e:
                 logger.error(f"状态回调执行失败: {e}")
 
@@ -185,8 +193,18 @@ class PlaybackManager:
                         silence = np.zeros((frames - actual_frames, self._playback_info.channels), dtype=np.float32)
                         audio_data = np.vstack([audio_data, silence])
 
+                    # 确保数据类型为 float32 并归一化
+                    if audio_data.dtype != np.float32:
+                        # 根据原始数据类型进行归一化
+                        if audio_data.dtype == np.int16:
+                            audio_data = audio_data.astype(np.float32) / 32768.0
+                        elif audio_data.dtype == np.int32:
+                            audio_data = audio_data.astype(np.float32) / 2147483648.0
+                        else:
+                            audio_data = audio_data.astype(np.float32)
+
                     # 写入输出缓冲区
-                    outdata[:] = audio_data.astype(np.float32)
+                    outdata[:] = audio_data
 
                     # 更新当前位置
                     self._playback_info.current_frame += actual_frames
@@ -318,8 +336,24 @@ class PlaybackManager:
                 self._running = True
                 self._pause_event.set()
 
+                # 存储当前事件循环引用（用于线程安全回调）
+                try:
+                    self._event_loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    self._event_loop = None
+
+                # 取消旧的位置更新任务（如果存在）
+                if self._position_update_task is not None and not self._position_update_task.done():
+                    self._position_update_task.cancel()
+
                 # 启动位置更新任务
-                asyncio.create_task(self._position_updater())
+                try:
+                    loop = asyncio.get_running_loop()
+                    self._position_update_task = loop.create_task(self._position_updater())
+                except RuntimeError:
+                    # 没有运行的事件循环，不启动位置更新任务
+                    logger.warning("没有运行的事件循环，位置更新任务未启动")
+                    self._position_update_task = None
 
                 # 发送初始状态
                 self._notify_state(start, duration, True)
@@ -459,6 +493,15 @@ class PlaybackManager:
         """
         self._running = False
         self._pause_event.set()
+
+        # 取消位置更新任务
+        if self._position_update_task is not None and not self._position_update_task.done():
+            try:
+                self._position_update_task.cancel()
+            except Exception as e:
+                logger.warning(f"取消位置更新任务时出错: {e}")
+            finally:
+                self._position_update_task = None
 
         # 停止并关闭音频流
         if self._stream is not None:

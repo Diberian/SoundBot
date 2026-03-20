@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import FastAPI, HTTPException, Query, Path as PathParam, BackgroundTasks, WebSocket, WebSocketDisconnect, Body
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
@@ -27,7 +27,6 @@ from core.database import get_db_manager, reset_db_manager, AudioFileRecord
 from core.websocket_manager import (
     get_ws_manager,
     reset_ws_manager,
-    broadcast_playback_state,
     register_playback_client,
     unregister_playback_client
 )
@@ -173,14 +172,35 @@ async def websocket_playback_state(websocket: WebSocket, client_id: str):
     # 设置播放管理器的状态回调
     playback = get_playback_manager()
 
-    async def state_callback(state: dict):
-        """播放状态回调"""
+    # 使用队列实现线程安全的状态传递
+    state_queue = asyncio.Queue()
+
+    def state_callback(state: dict):
+        """播放状态回调（同步函数，从音频线程调用）"""
         try:
-            await websocket.send_json(state)
+            # 将状态放入队列，由主循环处理
+            state_queue.put_nowait(state)
         except Exception:
             pass
 
     playback.set_state_callback(state_callback)
+
+    # 启动状态转发任务
+    async def forward_state():
+        """从队列转发状态到 WebSocket"""
+        while True:
+            try:
+                state = await asyncio.wait_for(state_queue.get(), timeout=1.0)
+                try:
+                    await websocket.send_json(state)
+                except Exception:
+                    pass
+            except asyncio.TimeoutError:
+                continue
+            except Exception:
+                break
+
+    forward_task = asyncio.create_task(forward_state())
 
     # 发送当前状态
     status = playback.get_status()
@@ -208,13 +228,23 @@ async def websocket_playback_state(websocket: WebSocket, client_id: str):
                 })
 
     except WebSocketDisconnect:
-        logger.info(f"[WS Playback] WebSocket 断开: client_id={client_id}")
+        logger.info(f"[WS Playback] WebSocket 断开: {client_id}")
         await unregister_playback_client(client_id, websocket)
     except json.JSONDecodeError:
         logger.warning(f"[WS Playback] 无效的 JSON 消息 from {client_id}")
     except Exception as e:
         logger.error(f"[WS Playback] WebSocket 错误: {e}")
         await unregister_playback_client(client_id, websocket)
+    finally:
+        # 取消状态转发任务
+        if forward_task and not forward_task.done():
+            forward_task.cancel()
+            try:
+                await forward_task
+            except asyncio.CancelledError:
+                pass
+        # 清除播放管理器的回调
+        playback.set_state_callback(None)
 
 
 # ==================== 健康检查 ====================

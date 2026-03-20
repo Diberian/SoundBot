@@ -530,6 +530,9 @@
         function handlePlaybackStateUpdate(state) {
             if (!state || typeof state.position !== 'number') return;
 
+            // 只在后端播放模式下更新状态
+            if (!useBackendPlayback) return;
+
             // 更新播放进度
             playbackProgress = Math.round(state.position * 1000);
 
@@ -537,9 +540,10 @@
             const wasPlaying = isPlaying;
             isPlaying = state.is_playing;
 
-            // 更新 WaveSurfer 游标位置
-            if (waveSurfer && !waveSurfer.isPlaying?.()) {
-                waveSurfer.seekTo(state.position / state.duration);
+            // 更新 WaveSurfer 游标位置（仅在后端播放时）
+            if (waveSurfer && state.duration > 0) {
+                const progress = state.position / state.duration;
+                waveSurfer.seekTo(progress);
             }
 
             // 更新播放 UI
@@ -548,6 +552,12 @@
             // 如果播放状态发生变化，更新播放按钮
             if (wasPlaying !== isPlaying) {
                 updatePlayButtonState();
+            }
+
+            // 如果播放已结束，重置状态
+            if (!state.is_playing && state.position >= state.duration - 0.1) {
+                playbackProgress = 0;
+                updatePlaybackUI();
             }
         }
 
