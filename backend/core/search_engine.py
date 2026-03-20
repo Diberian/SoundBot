@@ -114,74 +114,20 @@ class QueryCache:
 
 
 class ChineseTextProcessor:
-    """中文文本处理器"""
+    """中文文本处理器 - 使用 UCS 关键词库"""
     
-    # 常见的音效中文-英文映射
-    SOUND_KEYWORDS_MAP = {
-        "猫": ["cat", "meow", "kitten"],
-        "狗": ["dog", "bark", "puppy"],
-        "门": ["door", "knock", "open", "close"],
-        "火": ["fire", "flame", "burn"],
-        "水": ["water", "splash", "drop"],
-        "风": ["wind", "breeze", "gust"],
-        "雨": ["rain", "storm", "thunder"],
-        "雷": ["thunder", "lightning", "storm"],
-        "电": ["electric", "spark", "zap"],
-        "车": ["car", "vehicle", "automobile"],
-        "铃": ["bell", "ring", "chime"],
-        "钟": ["clock", "tick", "tock"],
-        "枪": ["gun", "shot", "firearm"],
-        "爆炸": ["explosion", "blast", "boom"],
-        "撞击": ["impact", "hit", "crash"],
-        "点击": ["click", "tap", "button"],
-        "提示音": ["notification", "alert", "beep"],
-        "音乐": ["music", "melody", "song"],
-        "人声": ["voice", "speech", "vocal"],
-        "动物": ["animal", "creature", "wildlife"],
-        "机械": ["machine", "mechanical", "gear"],
-        "电子": ["electronic", "digital", "synthetic"],
-        "环境": ["ambient", "environment", "background"],
-        "UI": ["ui", "interface", "menu"],
-        "游戏": ["game", "gaming", "arcade"],
-        "恐怖": ["horror", "scary", "creepy"],
-        "搞笑": ["funny", "comedy", "cartoon"],
-        "石头": ["stone", "rock", "pebble", "gravel", "debris"],
-        "石": ["stone", "rock", "pebble"],
-        "岩": ["rock", "stone", "boulder"],
-        "土": ["dirt", "soil", "earth", "mud"],
-        "泥": ["mud", "dirt", "clay"],
-        "沙": ["sand", "gravel", "grit"],
-        "金属": ["metal", "iron", "steel", "aluminum"],
-        "木": ["wood", "wooden", "timber"],
-        "玻璃": ["glass", "crystal", "window"],
-        "纸": ["paper", "cardboard", "parchment"],
-        "布": ["cloth", "fabric", "textile", "cotton"],
-    }
+    def __init__(self):
+        # 惰性加载 UCS 关键词
+        from core.ucs_keywords import UCSKeywordProcessor
+        self._ucs_processor = UCSKeywordProcessor()
     
-    @classmethod
-    def extract_keywords(cls, text: str) -> List[str]:
-        """提取关键词（中英文）"""
-        keywords = []
-        
-        # 检查中文关键词映射
-        for cn_keyword, en_keywords in cls.SOUND_KEYWORDS_MAP.items():
-            if cn_keyword in text:
-                keywords.extend(en_keywords)
-        
-        return keywords
+    def extract_keywords(self, text: str) -> List[str]:
+        """提取关键词（使用 UCS 库）"""
+        return self._ucs_processor.extract_keywords(text)
     
-    @classmethod
-    def expand_query(cls, query: str) -> List[str]:
-        """扩展查询（中文 -> 英文）"""
-        queries = [query]  # 原始查询
-        
-        # 提取英文关键词
-        keywords = cls.extract_keywords(query)
-        if keywords:
-            # 添加英文关键词组合
-            queries.append(" ".join(keywords[:3]))  # 最多3个关键词
-        
-        return queries
+    def expand_query(self, query: str) -> List[str]:
+        """扩展查询（使用 UCS 库）"""
+        return self._ucs_processor.expand_query(query)
 
 
 class OptimizedAudioSearcher(AudioSearcher):
