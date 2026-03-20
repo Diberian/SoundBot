@@ -2348,7 +2348,7 @@ async def update_project(project_id: str, request: schemas.UpdateProjectRequest)
 @app.delete("/api/v1/projects/{project_id}")
 async def delete_project(project_id: str):
     """
-    删除工程（会级联删除所有相关文件和向量数据库）
+    删除工程（会级联删除所有相关文件、向量数据库和缓存）
     """
     try:
         db_manager = get_db_manager()
@@ -2362,6 +2362,10 @@ async def delete_project(project_id: str):
         if project_id == 'default':
             raise HTTPException(status_code=400, detail="不能删除默认工程")
 
+        # 检查是否是当前工程
+        current_project_id = getattr(config, 'CURRENT_PROJECT_ID', None)
+        is_current_project = (current_project_id == project_id)
+
         # 删除工程的向量数据库
         from core.indexer import delete_project_index
         index_deleted = delete_project_index(project_id)
@@ -2374,10 +2378,29 @@ async def delete_project(project_id: str):
         if not success:
             raise HTTPException(status_code=400, detail="删除工程失败")
 
+        # 如果删除的是当前工程，清理缓存并切换到默认工程
+        if is_current_project:
+            logger.info(f"删除的是当前工程 {project_id}，清理缓存并切换到默认工程")
+
+            # 清理音频缓存
+            from core.audio_cache import reset_audio_cache
+            reset_audio_cache()
+
+            # 清理查询缓存
+            from core.search_engine import get_optimized_searcher
+            searcher = get_optimized_searcher()
+            asyncio.create_task(searcher.clear_cache())
+
+            # 切换到默认工程
+            config.CURRENT_PROJECT_ID = 'default'
+            logger.info("已切换到默认工程")
+
         return {
             "success": True,
             "message": "工程已删除",
-            "index_deleted": index_deleted
+            "index_deleted": index_deleted,
+            "was_current_project": is_current_project,
+            "switched_to_default": is_current_project
         }
     except Exception as e:
         logger.error(f"删除工程失败: {e}")
@@ -2389,7 +2412,7 @@ async def switch_project(project_id: str):
     """
     切换到指定工程
 
-    会将工程添加到最近工程列表，同时切换向量数据库
+    会将工程添加到最近工程列表，同时切换向量数据库和清理缓存
     """
     try:
         db_manager = get_db_manager()
@@ -2398,6 +2421,24 @@ async def switch_project(project_id: str):
         project = db_manager.get_project(project_id)
         if not project:
             raise HTTPException(status_code=404, detail="工程不存在")
+
+        # 获取当前工程ID（用于判断是否真的切换了）
+        old_project_id = getattr(config, 'CURRENT_PROJECT_ID', None)
+
+        # 如果确实切换了工程，清理旧工程的缓存
+        if old_project_id and old_project_id != project_id:
+            logger.info(f"切换工程: {old_project_id} -> {project_id}，清理缓存")
+
+            # 清理音频缓存
+            from core.audio_cache import reset_audio_cache
+            reset_audio_cache()
+            logger.info("音频缓存已清理")
+
+            # 清理查询缓存
+            from core.search_engine import get_optimized_searcher
+            searcher = get_optimized_searcher()
+            asyncio.create_task(searcher.clear_cache())
+            logger.info("查询缓存已清理")
 
         # 添加到最近工程
         db_manager.add_to_recent_projects(project_id)
@@ -2423,6 +2464,7 @@ async def switch_project(project_id: str):
             "project_id": project_id,
             "project_name": project['name'],
             "message": f"已切换到工程 '{project['name']}'",
+            "cache_cleared": old_project_id != project_id,
             "vector_db": {
                 "indexed_count": indexed_count,
                 "embedder_available": embedder_available
