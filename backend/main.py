@@ -2291,6 +2291,30 @@ async def get_all_projects():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# 注意：/api/v1/projects/recent 必须在 /api/v1/projects/{project_id} 之前定义
+# 否则 FastAPI 会将 "recent" 匹配为 project_id 参数
+@app.get("/api/v1/projects/recent")
+async def get_recent_projects(limit: int = 10):
+    """
+    获取最近使用的工程列表
+    """
+    try:
+        db_manager = get_db_manager()
+        projects = db_manager.get_recent_projects(limit)
+
+        # 添加每个工程的文件数量
+        for project in projects:
+            project['file_count'] = db_manager.get_project_file_count(project['id'])
+
+        return {
+            "total": len(projects),
+            "projects": projects
+        }
+    except Exception as e:
+        logger.error(f"获取最近工程失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/v1/projects/{project_id}")
 async def get_project(project_id: str):
     """
@@ -2471,27 +2495,7 @@ async def switch_project(project_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/v1/projects/recent")
-async def get_recent_projects(limit: int = 10):
-    """
-    获取最近使用的工程列表
-    """
-    try:
-        db_manager = get_db_manager()
-        projects = db_manager.get_recent_projects(limit)
-
-        # 添加每个工程的文件数量
-        for project in projects:
-            project['file_count'] = db_manager.get_project_file_count(project['id'])
-
-        return {
-            "total": len(projects),
-            "projects": projects
-        }
-    except Exception as e:
-        logger.error(f"获取最近工程失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
+# ==================== 工程文件和文件夹管理 ====================
 
 @app.get("/api/v1/projects/{project_id}/files")
 async def get_project_files(project_id: str):
