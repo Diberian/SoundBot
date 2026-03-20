@@ -42,7 +42,7 @@ class AudioSearcher:
             collection_name: Collection 名称
         """
         if persist_directory is None:
-            persist_directory = str(config.get_db_path())
+            persist_directory = str(config.get_chroma_db_path())
         
         self.persist_directory = persist_directory
         self.collection_name = collection_name

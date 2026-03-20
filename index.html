@@ -3945,6 +3945,10 @@
                     if (message.data && message.data.message) {
                         showNotification(message.data.message, 'info');
                     }
+                    if (!scanProgressModal) {
+                        scanProgressModal = createScanProgressModal();
+                        document.body.appendChild(scanProgressModal);
+                    }
                     break;
                 case 'scan_log':
                     // 扫描调试日志 - 在 F12 控制台显示
