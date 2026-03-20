@@ -823,17 +823,27 @@ async function startBackendServer() {
       let errorOutput = '';
 
       backendProcess.stdout.on('data', (data) => {
-        const text = data.toString();
-        startupOutput += text;
-        console.log('[Backend]', text);
+        try {
+          const text = data.toString();
+          startupOutput += text;
+          if (backendProcess) {
+            console.log('[Backend]', text);
+          }
+        } catch (e) {
+          // 忽略管道错误
+        }
       });
 
       backendProcess.stderr.on('data', (data) => {
-        const text = data.toString();
-        errorOutput += text;
-        // 只在启动阶段记录错误
-        if (attempt <= maxRetries) {
-          console.error('[Backend Warning]', text);
+        try {
+          const text = data.toString();
+          errorOutput += text;
+          // 只在启动阶段记录错误
+          if (attempt <= maxRetries && backendProcess) {
+            console.error('[Backend Warning]', text);
+          }
+        } catch (e) {
+          // 忽略管道错误
         }
       });
 
