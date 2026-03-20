@@ -185,16 +185,47 @@ class DatabaseManager:
     def _get_connection(self) -> sqlite3.Connection:
         """获取线程局部的数据库连接"""
         if not hasattr(self._local, 'conn') or self._local.conn is None:
-            self._local.conn = sqlite3.connect(
-                self.db_path,
-                check_same_thread=False,
-                timeout=30.0
-            )
-            self._local.conn.row_factory = sqlite3.Row
-            # 启用 WAL 模式提升并发性能
-            self._local.conn.execute("PRAGMA journal_mode=WAL")
-            self._local.conn.execute("PRAGMA synchronous=NORMAL")
+            try:
+                self._local.conn = sqlite3.connect(
+                    self.db_path,
+                    check_same_thread=False,
+                    timeout=30.0
+                )
+                self._local.conn.row_factory = sqlite3.Row
+                # 启用 WAL 模式提升并发性能
+                self._local.conn.execute("PRAGMA journal_mode=WAL")
+                self._local.conn.execute("PRAGMA synchronous=NORMAL")
+            except sqlite3.Error as e:
+                _get_logger().error(f"数据库连接失败: {e}")
+                # 尝试修复数据库
+                self._repair_database()
+                # 重新连接
+                self._local.conn = sqlite3.connect(
+                    self.db_path,
+                    check_same_thread=False,
+                    timeout=30.0
+                )
+                self._local.conn.row_factory = sqlite3.Row
+                self._local.conn.execute("PRAGMA journal_mode=WAL")
+                self._local.conn.execute("PRAGMA synchronous=NORMAL")
         return self._local.conn
+
+    def _repair_database(self):
+        """尝试修复损坏的数据库"""
+        try:
+            _get_logger().warning(f"尝试修复数据库: {self.db_path}")
+            # 删除 WAL 相关文件
+            import os
+            wal_file = self.db_path + "-wal"
+            shm_file = self.db_path + "-shm"
+            if os.path.exists(wal_file):
+                os.remove(wal_file)
+                _get_logger().info(f"删除 WAL 文件: {wal_file}")
+            if os.path.exists(shm_file):
+                os.remove(shm_file)
+                _get_logger().info(f"删除 SHM 文件: {shm_file}")
+        except Exception as e:
+            _get_logger().error(f"修复数据库失败: {e}")
 
     @contextmanager
     def get_cursor(self):
@@ -777,16 +808,27 @@ class DatabaseManager:
         Returns:
             是否成功
         """
-        try:
-            with self.get_cursor() as cursor:
-                cursor.execute("""
-                    INSERT OR REPLACE INTO recent_projects (project_id, opened_at)
-                    VALUES (?, ?)
-                """, (project_id, datetime.now().isoformat()))
-            return True
-        except Exception as e:
-            _get_logger().error(f"添加最近工程失败 {project_id}: {e}")
-            return False
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                with self.get_cursor() as cursor:
+                    cursor.execute("""
+                        INSERT OR REPLACE INTO recent_projects (project_id, opened_at)
+                        VALUES (?, ?)
+                    """, (project_id, datetime.now().isoformat()))
+                return True
+            except sqlite3.Error as e:
+                if "acquire_write" in str(e) or "database is locked" in str(e):
+                    _get_logger().warning(f"数据库忙，重试 {attempt+1}/{max_retries}: {e}")
+                    if attempt == 0:
+                        # 第一次失败，尝试修复
+                        self._repair_database()
+                    import time
+                    time.sleep(0.1 * (attempt + 1))  # 递增延迟
+                else:
+                    _get_logger().error(f"添加最近工程失败 {project_id}: {e}")
+                    return False
+        return False
 
     def get_recent_projects(self, limit: int = 10) -> List[Dict[str, Any]]:
         """
