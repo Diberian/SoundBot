@@ -25,6 +25,7 @@ from core.searcher import get_searcher, AudioSearcher, reset_searcher
 from core.embedder import get_embedder, reset_embedder, is_embedder_available
 from core.database import get_db_manager, reset_db_manager, AudioFileRecord
 from core.websocket_manager import get_ws_manager, reset_ws_manager
+from core.audio_cache import get_audio_cache, reset_audio_cache
 from utils.logger import logger
 
 # 线程池用于 CPU 密集型任务
@@ -62,10 +63,15 @@ async def lifespan(app: FastAPI):
 
     logger.info("临时文件由用户自行管理，不执行自动清理")
 
+    # 初始化 LRU 音频缓存
+    cache = get_audio_cache()
+    logger.info(f"LRU 音频缓存已初始化，最大容量: {cache._max_size} 个文件")
+
     yield
 
     logger.info("SoundMind API 关闭中...")
     logger.info("临时文件由用户自行管理，不执行自动清理")
+    reset_audio_cache()  # 清理 LRU 缓存
     reset_embedder()
     reset_indexer()
     reset_searcher()
@@ -153,6 +159,90 @@ async def health_check():
         version=config.APP_VERSION,
         device=config.get_device()
     )
+
+
+# ==================== LRU 音频缓存管理 ====================
+
+@app.get("/api/v1/cache/stats")
+async def get_cache_stats():
+    """
+    获取 LRU 音频缓存统计信息
+
+    返回格式：
+    {
+        "size": 50,                    # 当前缓存文件数
+        "max_size": 100,               # 最大容量
+        "hits": 1234,                  # 命中次数
+        "misses": 567,                 # 未命中次数
+        "total_requests": 1801,       # 总请求数
+        "hit_rate": 0.685,             # 命中率
+        "total_evictions": 0,          # 总踢出次数
+        "total_memory_bytes": 52428800, # 总内存占用（字节）
+        "total_memory_mb": 50.0        # 总内存占用（MB）
+    }
+    """
+    cache = get_audio_cache()
+    return cache.get_stats()
+
+
+@app.post("/api/v1/cache/clear")
+async def clear_cache():
+    """
+    清空 LRU 音频缓存
+
+    返回格式：
+    {
+        "success": true,
+        "cleared_count": 50,
+        "message": "缓存已清空，共 50 个条目"
+    }
+    """
+    cache = get_audio_cache()
+    cleared_count = cache.clear()
+    cache.reset_stats()
+    return {
+        "success": True,
+        "cleared_count": cleared_count,
+        "message": f"缓存已清空，共 {cleared_count} 个条目"
+    }
+
+
+@app.get("/api/v1/cache/check/{file_path:path}")
+async def check_cache(file_path: str):
+    """
+    检查指定文件是否在缓存中
+
+    - **file_path**: 文件路径（URL编码）
+
+    返回格式：
+    {
+        "cached": true,
+        "file_path": "/path/to/file.wav",
+        "memory_mb": 12.5,
+        "last_access": 1701234567.890
+    }
+    """
+    import urllib.parse
+    decoded_path = urllib.parse.unquote(file_path)
+
+    cache = get_audio_cache()
+
+    if decoded_path in cache:
+        entry = cache.get(decoded_path)
+        return {
+            "cached": True,
+            "file_path": decoded_path,
+            "memory_mb": round(entry.memory_size / (1024 * 1024), 2) if entry else 0,
+            "last_access": entry.last_access if entry else 0,
+            "sample_rate": entry.sample_rate if entry else 0,
+            "duration": entry.duration if entry else 0,
+            "channels": entry.channels if entry else 0
+        }
+    else:
+        return {
+            "cached": False,
+            "file_path": decoded_path
+        }
 
 
 # ==================== 扫描与索引 ====================
@@ -791,10 +881,10 @@ async def get_audio(file_path: str = PathParam(..., description="音频文件路
     file_path = urllib.parse.unquote(file_path)
 
     audio_file = config.validate_audio_path(file_path)
-    
+
     # 获取文件大小
     file_size = audio_file.stat().st_size
-    
+
     # 获取 MIME 类型
     mime_types = {
         '.wav': 'audio/wav',
@@ -807,13 +897,178 @@ async def get_audio(file_path: str = PathParam(..., description="音频文件路
         '.aac': 'audio/aac'
     }
     mime_type = mime_types.get(audio_file.suffix.lower(), 'application/octet-stream')
-    
+
     # 创建文件响应，支持范围请求
     return FileResponse(
         path=str(audio_file),
         media_type=mime_type,
         filename=audio_file.name
     )
+
+
+@app.get("/api/v1/audio/decoded/{file_path:path}")
+async def get_decoded_audio(file_path: str):
+    """
+    获取已解码的音频数据（使用 LRU 缓存）
+
+    第二次点击同一文件时可以享受缓存加速
+
+    返回格式：
+    {
+        "path": "/path/to/file.wav",
+        "filename": "file.wav",
+        "cached": true,                    # 是否从缓存获取
+        "sample_rate": 48000,               # 采样率
+        "channels": 2,                       # 声道数
+        "duration": 12.4,                   # 时长（秒）
+        "size": 1234567,                    # 原始文件大小
+        "memory_size": 4243456,             # 内存占用（字节）
+        "waveform_peaks": [0.1, 0.4, ...]  # 波形峰值（2000点）
+    }
+    """
+    import urllib.parse
+    import time
+    import numpy as np
+    import soundfile as sf
+
+    file_path = urllib.parse.unquote(file_path)
+    audio_file = config.validate_audio_path(file_path)
+
+    start_time = time.time()
+    cache = get_audio_cache()
+
+    # 尝试从缓存获取
+    cached_entry = cache.get(file_path)
+
+    if cached_entry:
+        # 命中缓存
+        cached_flag = True
+        audio_data = cached_entry.audio_data
+        sample_rate = cached_entry.sample_rate
+        channels = cached_entry.channels
+        duration = cached_entry.duration
+    else:
+        # 未命中，从磁盘加载
+        cached_flag = False
+        try:
+            audio_data, sample_rate = librosa.load(str(audio_file), sr=None, mono=False)
+            info = sf.info(str(audio_file))
+            channels = info.channels
+            duration = info.duration
+
+            # 放入缓存
+            from core.audio_cache import AudioCacheEntry
+            entry = AudioCacheEntry(
+                audio_data=audio_data,
+                sample_rate=sample_rate,
+                duration=duration,
+                last_access=time.time(),
+                file_size=audio_file.stat().st_size,
+                channels=channels
+            )
+            cache.put(file_path, entry)
+        except Exception as e:
+            logger.error(f"解码音频失败 {file_path}: {e}")
+            raise HTTPException(status_code=500, detail=f"解码失败: {str(e)}")
+
+    # 生成波形峰值
+    if audio_data.ndim > 1:
+        audio_mono = np.mean(audio_data, axis=0)
+    else:
+        audio_mono = audio_data
+
+    target_points = 2000
+    samples_per_point = max(1, len(audio_mono) // target_points)
+    peaks = []
+    for i in range(target_points):
+        start = i * samples_per_point
+        end = min((i + 1) * samples_per_point, len(audio_mono))
+        if end > start:
+            peak = float(np.max(np.abs(audio_mono[start:end])))
+            peaks.append(peak)
+        else:
+            peaks.append(0.0)
+
+    load_time_ms = round((time.time() - start_time) * 1000, 2)
+
+    return {
+        "path": file_path,
+        "filename": audio_file.name,
+        "cached": cached_flag,
+        "load_time_ms": load_time_ms,
+        "sample_rate": sample_rate,
+        "channels": channels,
+        "duration": duration,
+        "size": audio_file.stat().st_size,
+        "memory_size": audio_data.nbytes,
+        "waveform_peaks": peaks
+    }
+
+
+@app.post("/api/v1/audio/preload/{file_path:path}")
+async def preload_audio_to_cache(file_path: str):
+    """
+    预加载音频到 LRU 缓存
+
+    用于提前缓存即将播放的文件
+
+    返回格式：
+    {
+        "success": true,
+        "path": "/path/to/file.wav",
+        "cached": true,
+        "memory_mb": 12.5
+    }
+    """
+    import urllib.parse
+    import time
+    import soundfile as sf
+
+    file_path = urllib.parse.unquote(file_path)
+    audio_file = config.validate_audio_path(file_path)
+
+    cache = get_audio_cache()
+
+    # 检查是否已在缓存中
+    if file_path in cache:
+        entry = cache.get(file_path)
+        return {
+            "success": True,
+            "path": file_path,
+            "cached": True,
+            "memory_mb": round(entry.memory_size / (1024 * 1024), 2) if entry else 0
+        }
+
+    # 从磁盘加载并缓存
+    try:
+        start_time = time.time()
+        audio_data, sample_rate = librosa.load(str(audio_file), sr=None, mono=False)
+        info = sf.info(str(audio_file))
+
+        from core.audio_cache import AudioCacheEntry
+        entry = AudioCacheEntry(
+            audio_data=audio_data,
+            sample_rate=sample_rate,
+            duration=info.duration,
+            last_access=time.time(),
+            file_size=audio_file.stat().st_size,
+            channels=info.channels
+        )
+
+        cache.put(file_path, entry)
+        load_time_ms = round((time.time() - start_time) * 1000, 2)
+
+        return {
+            "success": True,
+            "path": file_path,
+            "cached": False,
+            "memory_mb": round(entry.memory_size / (1024 * 1024), 2),
+            "load_time_ms": load_time_ms
+        }
+
+    except Exception as e:
+        logger.error(f"预加载失败 {file_path}: {e}")
+        raise HTTPException(status_code=500, detail=f"预加载失败: {str(e)}")
 
 
 # ==================== 索引状态 ====================
