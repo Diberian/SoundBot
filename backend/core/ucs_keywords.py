@@ -8,6 +8,7 @@ UCS (Universal Category System) 关键词映射模块
 1. 惰性加载 - 首次使用时才加载 Excel 数据
 2. 缓存机制 - 加载后缓存到内存，避免重复读取
 3. 性能优化 - 使用字典结构，O(1) 查询复杂度
+4. 中文分词 - 支持 jieba 中文分词扩展
 
 ================================================================================
 数据来源 / Data Source
@@ -43,8 +44,9 @@ Copyright (c) 2024 SoundMind Project
 """
 
 import os
+import re
 import logging
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 from functools import lru_cache
 
 logger = logging.getLogger(__name__)
@@ -52,6 +54,17 @@ logger = logging.getLogger(__name__)
 # 全局缓存
 _ucs_keywords_cache: Optional[Dict[str, List[str]]] = None
 _ucs_loaded = False
+_jieba_available = False
+
+# 尝试导入 jieba
+try:
+    import jieba
+    _jieba_available = True
+    # 初始化 jieba（预加载词典）
+    jieba.initialize()
+except ImportError:
+    logger.warning("jieba 未安装，中文分词功能受限。请运行: pip install jieba")
+    _jieba_available = False
 
 
 def load_ucs_keywords(excel_path: Optional[str] = None) -> Dict[str, List[str]]:
@@ -273,14 +286,14 @@ def search_ucs_keywords(partial: str, limit: int = 10) -> List[str]:
 # 兼容性：提供与 ChineseTextProcessor 类似的接口
 class UCSKeywordProcessor:
     """UCS 关键词处理器"""
-    
+
     def __init__(self):
         self._keywords = get_ucs_keywords()
-    
+
     def expand_query(self, query: str) -> List[str]:
         """扩展查询"""
         return expand_query_with_ucs(query)
-    
+
     def extract_keywords(self, text: str) -> List[str]:
         """提取匹配的 UCS 关键词"""
         matches = []
@@ -288,7 +301,7 @@ class UCSKeywordProcessor:
             if cn_keyword in text:
                 matches.extend(self._keywords[cn_keyword])
         return matches
-    
+
     def get_stats(self) -> dict:
         """获取统计信息"""
         return {
@@ -296,22 +309,104 @@ class UCSKeywordProcessor:
             "loaded": _ucs_loaded
         }
 
+    def tokenize(self, text: str) -> List[str]:
+        """
+        中文分词
+
+        Args:
+            text: 输入文本
+
+        Returns:
+            分词后的词语列表
+        """
+        if not text:
+            return []
+
+        # 检查是否有中文
+        has_chinese = bool(re.search(r'[\u4e00-\u9fff]', text))
+
+        if has_chinese and _jieba_available:
+            # 使用 jieba 分词
+            tokens = list(jieba.cut(text))
+        else:
+            # 英文或其他语言，按空格和常见分隔符分词
+            tokens = [t.strip() for t in re.split(r'[\s_\-\.,]+', text) if t.strip()]
+
+        # 过滤单字符和空字符串
+        return [t for t in tokens if len(t) > 1]
+
+    def expand_query_with_tokenization(self, query: str) -> List[str]:
+        """
+        使用中文分词扩展查询
+
+        结合 jieba 分词和 UCS 关键词扩展，实现更全面的查询扩展
+
+        Args:
+            query: 原始查询
+
+        Returns:
+            扩展后的查询列表
+        """
+        if not query:
+            return [query] if query else []
+
+        expanded = [query]  # 保留原始查询
+        seen = {query.lower()}
+
+        # 方法1：直接使用 UCS 扩展原始查询
+        ucs_expanded = expand_query_with_ucs(query)
+        for q in ucs_expanded:
+            q_lower = q.lower()
+            if q_lower not in seen and len(q_lower) > 1:
+                seen.add(q_lower)
+                expanded.append(q)
+
+        # 方法2：如果有中文，使用 jieba 分词后扩展
+        if _jieba_available and re.search(r'[\u4e00-\u9fff]', query):
+            tokens = self.tokenize(query)
+
+            for token in tokens:
+                if token.lower() not in seen and len(token) > 1:
+                    seen.add(token.lower())
+                    expanded.append(token)
+
+                    # 对每个分词结果再进行 UCS 扩展
+                    token_expanded = expand_query_with_ucs(token)
+                    for q in token_expanded:
+                        q_lower = q.lower()
+                        if q_lower not in seen and len(q_lower) > 1:
+                            seen.add(q_lower)
+                            expanded.append(q)
+
+        # 去重并保持原始查询在首位
+        return list(dict.fromkeys(expanded))
+
 
 # 测试代码
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    
+
     # 测试加载
     keywords = load_ucs_keywords()
     print(f"\n加载了 {len(keywords)} 个关键词映射")
-    
+
+    # 测试中文分词
+    processor = UCSKeywordProcessor()
+    print("\n=== 中文分词测试 ===")
+    test_texts = ["鸟叫声", "古典音乐钢琴曲", "汽车发动机声音"]
+    for text in test_texts:
+        tokens = processor.tokenize(text)
+        print(f"'{text}' -> {tokens}")
+
     # 测试查询扩展
-    test_queries = ["石头", "风声", "爆炸", "门铃"]
+    print("\n=== 查询扩展测试 ===")
+    test_queries = ["石头", "风声", "爆炸", "门铃", "鸟叫声"]
     for query in test_queries:
-        expanded = expand_query_with_ucs(query)
+        expanded = processor.expand_query_with_tokenization(query)
         print(f"\n'{query}' -> {expanded}")
-    
+
     # 测试搜索
-    print("\n搜索 '石':")
+    print("\n=== 关键词搜索测试 ===")
+    print("搜索 '石':")
     results = search_ucs_keywords("石", 5)
     print(results)
