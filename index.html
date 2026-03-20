@@ -1977,6 +1977,14 @@
                                 <span></span><span></span><span></span><span></span>
                             </div>
                         ` : ''}
+                        ${sound.similarity !== undefined ? `
+                            <div class="flex items-center gap-1 text-xs opacity-60" title="语义: ${(sound.semanticScore || 0).toFixed(2)}, 关键词: ${(sound.keywordScore || 0).toFixed(2)}">
+                                <span class="px-1.5 py-0.5 rounded" style="background: ${sound.keywordOnly ? '#f59e0b' : (sound.keywordScore >= 0.7 ? '#22c55e' : '#3b82f6')}; color: white; font-size: 10px;">
+                                    ${(sound.similarity * 100).toFixed(0)}%
+                                </span>
+                                ${sound.keywordOnly ? '<span style="color: #f59e0b;">关键词</span>' : ''}
+                            </div>
+                        ` : ''}
                     </div>
                     <div class="w-24 text-right text-sm opacity-70 font-mono">${formatTime(sound.duration)}</div>
                     <div class="w-16 flex justify-center">
@@ -4521,6 +4529,10 @@
                             size: r.audio_file.size || 0,
                             type: '.' + r.audio_file.format,
                             similarity: r.score,
+                            // 混合搜索分数详情
+                            semanticScore: r.metadata?.semantic_score,
+                            keywordScore: r.metadata?.keyword_score,
+                            keywordOnly: r.metadata?.keyword_only,
                             lastModified: new Date()
                         }));
                         

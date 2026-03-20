@@ -205,7 +205,7 @@ class AudioIndexer:
                     
                 embedding = embedder.audio_to_embedding(file_path)
                 
-                # 准备元数据
+                # 准备元数据（包含文件名解析信息）
                 metadata = {
                     "file_path": file_path,
                     "filename": audio_file.filename,
@@ -214,31 +214,36 @@ class AudioIndexer:
                     "channels": audio_file.channels,
                     "format": audio_file.format,
                     "size": audio_file.size,
-                    "hash": self._get_file_hash(file_path)
+                    "hash": self._get_file_hash(file_path),
+                    "folder_path": audio_file.folder_path,
+                    "parsed_name": audio_file.parsed_name,
+                    "name_description": audio_file.name_description,
+                    # 将元数据标签序列化为字符串
+                    "metadata_tags": json.dumps(audio_file.metadata_tags, ensure_ascii=False) if audio_file.metadata_tags else "{}"
                 }
-                
+
                 # 添加到 ChromaDB
                 self.collection.add(
                     ids=[file_id],
                     embeddings=[embedding.tolist()],
                     metadatas=[metadata]
                 )
-                
+
                 # 更新元数据记录
                 self.indexed_files_meta[file_id] = metadata
                 added_count += 1
-                
+
             except Exception as e:
                 logger.error(f"索引文件失败 {file_path}: {e}")
-        
+
         # 处理需要更新的文件
         updated_count = 0
         for file_id, file_path, audio_file in to_update:
             try:
                 # 生成新的 embedding
                 embedding = embedder.audio_to_embedding(file_path)
-                
-                # 准备新的元数据
+
+                # 准备新的元数据（包含文件名解析信息）
                 metadata = {
                     "file_path": file_path,
                     "filename": audio_file.filename,
@@ -247,9 +252,13 @@ class AudioIndexer:
                     "channels": audio_file.channels,
                     "format": audio_file.format,
                     "size": audio_file.size,
-                    "hash": self._get_file_hash(file_path)
+                    "hash": self._get_file_hash(file_path),
+                    "folder_path": audio_file.folder_path,
+                    "parsed_name": audio_file.parsed_name,
+                    "name_description": audio_file.name_description,
+                    "metadata_tags": json.dumps(audio_file.metadata_tags, ensure_ascii=False) if audio_file.metadata_tags else "{}"
                 }
-                
+
                 # 更新 ChromaDB
                 self.collection.update(
                     ids=[file_id],

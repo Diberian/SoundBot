@@ -6,8 +6,9 @@
 
 import logging
 import os
+import re
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import librosa
 import soundfile as sf
 from pydantic import BaseModel
@@ -29,6 +30,12 @@ class AudioFile(BaseModel):
     format: str
     size: int
     folder_path: str = ""  # 文件所在文件夹路径（相对于导入根目录）
+    # 文件名解析的元数据
+    parsed_name: str = ""  # 解析后的文件名（去除扩展名和分隔符）
+    name_tokens: List[str] = []  # 文件名分词
+    name_description: str = ""  # 从文件名生成的描述
+    # 音频元数据标签
+    metadata_tags: Dict[str, Any] = {}  # 音频文件内置元数据标签
 
 
 class FolderNode(BaseModel):
@@ -278,6 +285,89 @@ class AudioScanner:
         logger.info(f"[SCANNER] 文件夹结构构建完成: {root_name}, 共 {len(audio_files)} 个文件")
         return audio_files, root_node
 
+    def _parse_filename(self, filename: str) -> tuple[str, List[str], str]:
+        """
+        解析文件名，提取有意义的词汇和描述
+
+        Args:
+            filename: 文件名（不含路径）
+
+        Returns:
+            (解析后的名称, 分词列表, 生成的描述)
+        """
+        # 去除扩展名
+        name_without_ext = os.path.splitext(filename)[0]
+
+        # 替换常见分隔符为空格
+        separators = r'[_\-\s\.]+'
+        parsed = re.sub(separators, ' ', name_without_ext)
+
+        # 分词
+        tokens = [t.strip() for t in parsed.split() if t.strip()]
+
+        # 过滤掉纯数字和过短的词
+        meaningful_tokens = []
+        for token in tokens:
+            # 保留长度大于1的词，或者包含字母的词
+            if len(token) > 1 or any(c.isalpha() for c in token):
+                # 去除常见无意义后缀
+                if token.lower() not in ['wav', 'mp3', 'flac', 'aif', 'aiff', 'm4a', 'ogg']:
+                    meaningful_tokens.append(token)
+
+        # 生成描述
+        description = ' '.join(meaningful_tokens)
+
+        return parsed, meaningful_tokens, description
+
+    def _extract_audio_metadata(self, file_path: Path) -> Dict[str, Any]:
+        """
+        提取音频文件的元数据标签
+
+        Args:
+            file_path: 文件路径
+
+        Returns:
+            元数据字典
+        """
+        metadata = {}
+        try:
+            # 使用 soundfile 读取元数据
+            info = sf.info(str(file_path))
+            if hasattr(info, 'comment') and info.comment:
+                metadata['comment'] = info.comment
+
+            # 尝试读取更多元数据（如ID3标签等）
+            # 对于不同格式使用不同的方法
+            suffix = file_path.suffix.lower()
+            if suffix == '.mp3':
+                try:
+                    from mutagen.mp3 import MP3
+                    audio = MP3(str(file_path))
+                    if audio.tags:
+                        for key, value in audio.tags.items():
+                            if value:
+                                metadata[key] = str(value)
+                except ImportError:
+                    pass
+            elif suffix in ['.flac', '.ogg']:
+                try:
+                    from mutagen.flac import FLAC
+                    from mutagen.oggvorbis import OggVorbis
+                    if suffix == '.flac':
+                        audio = FLAC(str(file_path))
+                    else:
+                        audio = OggVorbis(str(file_path))
+                    for key, value in audio.tags.items():
+                        if value:
+                            metadata[key] = str(value[0]) if isinstance(value, list) else str(value)
+                except ImportError:
+                    pass
+
+        except Exception as e:
+            logger.debug(f"提取音频元数据失败 {file_path}: {e}")
+
+        return metadata
+
     def _process_file(self, file_path: Path) -> Optional[AudioFile]:
         """
         处理单个音频文件，提取元数据
@@ -295,10 +385,16 @@ class AudioScanner:
         try:
             # 获取文件基本信息
             stat = file_path.stat()
-            
+
+            # 解析文件名
+            parsed_name, name_tokens, name_description = self._parse_filename(file_path.name)
+
+            # 提取音频元数据标签
+            metadata_tags = self._extract_audio_metadata(file_path)
+
             # 使用 soundfile 获取音频信息（更高效）
             info = sf.info(str(file_path))
-            
+
             return AudioFile(
                 path=str(file_path.absolute()),
                 filename=file_path.name,
@@ -306,20 +402,30 @@ class AudioScanner:
                 sample_rate=info.samplerate,
                 channels=info.channels,
                 format=info.format,
-                size=stat.st_size
+                size=stat.st_size,
+                parsed_name=parsed_name,
+                name_tokens=name_tokens,
+                name_description=name_description,
+                metadata_tags=metadata_tags
             )
         except Exception as e:
             # 如果 soundfile 失败，尝试使用 librosa
             try:
                 stat = file_path.stat()
                 y, sr = librosa.load(str(file_path), sr=None, mono=False)
-                
+
                 # 计算时长
                 duration = librosa.get_duration(y=y, sr=sr)
-                
+
                 # 确定声道数
                 channels = 1 if y.ndim == 1 else y.shape[0]
-                
+
+                # 解析文件名
+                parsed_name, name_tokens, name_description = self._parse_filename(file_path.name)
+
+                # 提取音频元数据标签
+                metadata_tags = self._extract_audio_metadata(file_path)
+
                 return AudioFile(
                     path=str(file_path.absolute()),
                     filename=file_path.name,
@@ -327,7 +433,11 @@ class AudioScanner:
                     sample_rate=sr,
                     channels=channels,
                     format=file_path.suffix.lower()[1:],
-                    size=stat.st_size
+                    size=stat.st_size,
+                    parsed_name=parsed_name,
+                    name_tokens=name_tokens,
+                    name_description=name_description,
+                    metadata_tags=metadata_tags
                 )
             except Exception as e:
                 # 跳过无法读取的文件
