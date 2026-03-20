@@ -369,7 +369,9 @@ function setupIpcHandlers() {
             body: JSON.stringify({
               query: data.query,
               top_k: data.topK,
-              threshold: data.threshold
+              threshold: data.threshold,
+              page: data.page || 1,
+              page_size: data.page_size || 50
             })
           });
           return await response.json();

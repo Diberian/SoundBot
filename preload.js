@@ -124,9 +124,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
         importFolderAsync: (folderPath, recursive = true, clientId = 'default') =>
           ipcRenderer.invoke('backend-api', 'import-async', { folderPath, recursive, clientId }),
 
-        // 语义搜索音频
-        searchAudio: (query, topK = 1000, threshold = 0.15) =>
-          ipcRenderer.invoke('backend-api', 'search', { query, topK, threshold }),
+        // 语义搜索音频（支持分页）
+        searchAudio: (query, topK = 10000, threshold = 0.15, page = 1, pageSize = 50) =>
+          ipcRenderer.invoke('backend-api', 'search', { query, topK, threshold, page, page_size: pageSize }),
 
         // 获取索引状态
         getIndexStatus: () => ipcRenderer.invoke('backend-api', 'index-status'),

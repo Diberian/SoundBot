@@ -1176,10 +1176,22 @@ async def search_audio(request: schemas.SearchRequest):
                 distance=1.0 - r.similarity
             ))
 
+        # 分页处理
+        total = len(search_results)
+        page = request.page
+        page_size = request.page_size
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+        paginated_results = search_results[start_idx:end_idx]
+        total_pages = (total + page_size - 1) // page_size
+
         return schemas.SearchResponse(
             query=request.query,
-            total=len(search_results),
-            results=search_results
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+            results=paginated_results
         )
 
     except Exception as e:

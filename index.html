@@ -4341,8 +4341,14 @@
             // ==================== 工程管理事件监听 ====================
             initProjectManagement();
 
-            // Search - 支持本地和后端语义搜索
+            // Search - 支持本地和后端语义搜索（带分页加载）
             let searchTimeout = null;
+            let currentSearchQuery = '';
+            let currentSearchPage = 1;
+            let isLoadingMore = false;
+            let hasMoreResults = true;
+            let allSearchResults = [];
+            
             document.getElementById('searchInput').addEventListener('input', (e) => {
                 const query = e.target.value.trim();
                 
@@ -4351,6 +4357,8 @@
                 
                 if (!query) {
                     // 空搜索时显示本地数据
+                    currentSearchQuery = '';
+                    allSearchResults = [];
                     renderSoundList('');
                     return;
                 }
@@ -4358,36 +4366,87 @@
                 // 如果是自然语言查询，调用后端语义搜索
                 if (query.length >= 2 && window.electronAPI && window.electronAPI.backendAPI) {
                     searchTimeout = setTimeout(async () => {
-                        try {
-                            showNotification('正在搜索...', 'info');
-                            const result = await window.electronAPI.backendAPI.searchAudio(query, 1000, 0.1);
-                            if (result && result.results) {
-                                // 将后端结果转换为前端格式
-                                const backendSounds = result.results.map((r, index) => ({
-                                    id: Date.now() + index,
-                                    name: r.audio_file.filename,
-                                    category: '搜索结果',
-                                    duration: r.audio_file.duration,
-                                    tags: ['AI搜索'],
-                                    filePath: r.audio_file.path,
-                                    size: r.audio_file.size || 0,
-                                    type: '.' + r.audio_file.format,
-                                    similarity: r.score,
-                                    lastModified: new Date()
-                                }));
-                                renderSoundList('', backendSounds);
-                                showNotification(`找到 ${backendSounds.length} 个结果`, 'success');
-                            }
-                        } catch (error) {
-                            console.error('搜索失败:', error);
-                            showNotification('搜索失败: ' + error.message, 'error');
-                            // 降级到本地搜索
-                            renderSoundList(query);
-                        }
+                        // 重置分页状态
+                        currentSearchQuery = query;
+                        currentSearchPage = 1;
+                        allSearchResults = [];
+                        hasMoreResults = true;
+                        isLoadingMore = false;
+                        
+                        await loadSearchResults(query, 1, true);
                     }, 500);
                 } else {
                     // 本地搜索
+                    currentSearchQuery = '';
+                    allSearchResults = [];
                     renderSoundList(query);
+                }
+            });
+            
+            // 加载搜索结果（分页）
+            async function loadSearchResults(query, page, isNewSearch = false) {
+                if (isLoadingMore || !hasMoreResults) return;
+                
+                isLoadingMore = true;
+                
+                try {
+                    if (isNewSearch) {
+                        showNotification('正在搜索...', 'info');
+                    }
+                    
+                    const result = await window.electronAPI.backendAPI.searchAudio(query, 10000, 0.1, page, 50);
+                    
+                    if (result && result.results) {
+                        // 将后端结果转换为前端格式
+                        const newSounds = result.results.map((r, index) => ({
+                            id: Date.now() + index + (page - 1) * 50,
+                            name: r.audio_file.filename,
+                            category: '搜索结果',
+                            duration: r.audio_file.duration,
+                            tags: ['AI搜索'],
+                            filePath: r.audio_file.path,
+                            size: r.audio_file.size || 0,
+                            type: '.' + r.audio_file.format,
+                            similarity: r.score,
+                            lastModified: new Date()
+                        }));
+                        
+                        if (isNewSearch) {
+                            allSearchResults = newSounds;
+                        } else {
+                            allSearchResults = allSearchResults.concat(newSounds);
+                        }
+                        
+                        // 更新分页状态
+                        currentSearchPage = result.page;
+                        hasMoreResults = currentSearchPage < result.total_pages;
+                        
+                        // 渲染结果
+                        renderSoundList('', allSearchResults);
+                        
+                        if (isNewSearch) {
+                            showNotification(`找到 ${result.total} 个结果，已显示 ${allSearchResults.length} 个`, 'success');
+                        }
+                    }
+                } catch (error) {
+                    console.error('搜索失败:', error);
+                    showNotification('搜索失败: ' + error.message, 'error');
+                    // 降级到本地搜索
+                    renderSoundList(query);
+                } finally {
+                    isLoadingMore = false;
+                }
+            }
+            
+            // 滚动加载更多
+            const soundListContainer = document.getElementById('soundList');
+            soundListContainer.addEventListener('scroll', () => {
+                if (!currentSearchQuery || isLoadingMore || !hasMoreResults) return;
+                
+                const { scrollTop, scrollHeight, clientHeight } = soundListContainer;
+                // 当滚动到距离底部 100px 时加载更多
+                if (scrollTop + clientHeight >= scrollHeight - 100) {
+                    loadSearchResults(currentSearchQuery, currentSearchPage + 1);
                 }
             });
             

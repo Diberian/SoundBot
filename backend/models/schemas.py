@@ -20,8 +20,10 @@ class ScanRequest(BaseModel):
 class SearchRequest(BaseModel):
     """语义搜索请求"""
     query: str = Field(..., description="搜索查询文本")
-    top_k: int = Field(default=20, ge=1, le=100, description="返回结果数量")
+    top_k: int = Field(default=10000, ge=1, le=10000, description="返回结果数量")
     threshold: float = Field(default=0.15, ge=0.0, le=1.0, description="相似度阈值")
+    page: int = Field(default=1, ge=1, description="页码（从1开始）")
+    page_size: int = Field(default=50, ge=1, le=200, description="每页数量")
     min_duration: Optional[float] = Field(default=None, description="最短时长（秒）")
     max_duration: Optional[float] = Field(default=None, description="最长时长（秒）")
     sample_rate: Optional[int] = Field(default=None, description="采样率（如 44100, 48000）")
@@ -65,6 +67,9 @@ class SearchResponse(BaseModel):
     """搜索响应"""
     query: str = Field(..., description="搜索查询")
     total: int = Field(..., description="结果总数")
+    page: int = Field(default=1, description="当前页码")
+    page_size: int = Field(default=50, description="每页数量")
+    total_pages: int = Field(default=1, description="总页数")
     results: List[SearchResult] = Field(..., description="搜索结果列表")
 
 
