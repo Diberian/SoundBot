@@ -1641,6 +1641,7 @@ async def stream_audio_from_cache(file_path: str):
     """
     import urllib.parse
     import io
+    import librosa
     import soundfile as sf
     import numpy as np
 
