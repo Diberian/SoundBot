@@ -39,6 +39,11 @@ CORS_ORIGINS = [
 HF_ENDPOINT = "https://hf-mirror.com"
 
 # CLAP 音频嵌入模型（使用更强的 larger_clap_general）
+# 模型引用 / Model Citation:
+#   Wu, Y., Chen, K., Zhang, T., Hui, Y., Berg-Kirkpatrick, T., & Dubnov, S. (2022).
+#   Large-scale Contrastive Language-Audio Pretraining with Feature Fusion and Keyword-to-Caption Augmentation.
+#   arXiv preprint arXiv:2211.06687.
+#   https://huggingface.co/laion/larger_clap_general
 CLAP_MODEL_NAME = "laion/larger_clap_general"
 CLAP_DEVICE = "auto"  # auto/cpu/cuda/mps
 

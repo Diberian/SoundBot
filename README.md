@@ -191,6 +191,30 @@ npm run build
 - **HTML/CSS/JavaScript** - 前端技术
 - **Tailwind CSS** - 样式框架
 - **Lucide Icons** - 图标库
+- **FastAPI** - 后端 API 框架
+- **CLAP** - 音频-文本嵌入模型
+
+## 模型引用 / Model Citation
+
+本项目使用 LAION 的 CLAP 模型进行音频语义理解：
+
+**模型**: `laion/larger_clap_general`
+
+**论文**: Wu, Y., Chen, K., Zhang, T., Hui, Y., Berg-Kirkpatrick, T., & Dubnov, S. (2022). Large-scale Contrastive Language-Audio Pretraining with Feature Fusion and Keyword-to-Caption Augmentation. arXiv preprint arXiv:2211.06687.
+
+**BibTeX**:
+```bibtex
+@misc{wu2022large,
+  doi = {10.48550/ARXIV.2211.06687},
+  url = {https://arxiv.org/abs/2211.06687},
+  author = {Wu, Yusong and Chen, Ke and Zhang, Tianyu and Hui, Yuchen and Berg-Kirkpatrick, Taylor and Dubnov, Shlomo},
+  title = {Large-scale Contrastive Language-Audio Pretraining with Feature Fusion and Keyword-to-Caption Augmentation},
+  publisher = {arXiv},
+  year = {2022}
+}
+```
+
+**HuggingFace**: https://huggingface.co/laion/larger_clap_general
 
 ## 许可证
 

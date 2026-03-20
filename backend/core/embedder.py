@@ -4,6 +4,24 @@ CLAP 音频-文本嵌入模型封装
 
 使用 LAION 的 CLAP 模型进行音频和文本的特征提取。
 支持音频-文本对齐搜索功能。
+
+模型引用 / Model Citation:
+    laion/larger_clap_general
+    
+    Wu, Y., Chen, K., Zhang, T., Hui, Y., Berg-Kirkpatrick, T., & Dubnov, S. (2022).
+    Large-scale Contrastive Language-Audio Pretraining with Feature Fusion and Keyword-to-Caption Augmentation.
+    arXiv preprint arXiv:2211.06687.
+    
+    @misc{wu2022large,
+      doi = {10.48550/ARXIV.2211.06687},
+      url = {https://arxiv.org/abs/2211.06687},
+      author = {Wu, Yusong and Chen, Ke and Zhang, Tianyu and Hui, Yuchen and Berg-Kirkpatrick, Taylor and Dubnov, Shlomo},
+      title = {Large-scale Contrastive Language-Audio Pretraining with Feature Fusion and Keyword-to-Caption Augmentation},
+      publisher = {arXiv},
+      year = {2022}
+    }
+    
+    HuggingFace: https://huggingface.co/laion/larger_clap_general
 """
 
 import logging
