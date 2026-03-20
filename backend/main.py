@@ -721,7 +721,12 @@ async def _scan_and_import_task(
     db_manager = get_db_manager()
     scanner = AudioScanner()
 
-    logger.info(f"[SCAN_TASK] 任务ID: {task_id}, 文件夹: {folder_path}, 递归: {recursive}, 客户端: {client_id}")
+    # 确保 CURRENT_PROJECT_ID 已初始化（防止竞态）
+    if not getattr(config, 'CURRENT_PROJECT_ID', None):
+        config.CURRENT_PROJECT_ID = 'default'
+        logger.warning("[SCAN_TASK] CURRENT_PROJECT_ID 未初始化，已设为 default")
+
+    logger.info(f"[SCAN_TASK] 任务ID: {task_id}, 文件夹: {folder_path}, 递归: {recursive}, 客户端: {client_id}, 工程: {config.CURRENT_PROJECT_ID}")
     logger.info(f"[SCAN_TASK] ws_manager 连接数: {ws_manager.get_connection_count()}")
     logger.info(f"[SCAN_TASK] 活跃连接: {list(ws_manager.active_connections.keys())}")
 

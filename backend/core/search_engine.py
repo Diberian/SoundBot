@@ -542,6 +542,7 @@ def get_optimized_searcher(
     """获取优化的搜索器单例"""
     global _optimized_searcher
     if _optimized_searcher is None:
+        # 显式传入路径，与 get_indexer() 保持一致
         _optimized_searcher = OptimizedAudioSearcher(
             persist_directory=persist_directory,
             collection_name=collection_name

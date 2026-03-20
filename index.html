@@ -5447,9 +5447,15 @@
                         const clientId = `client_${Date.now()}`;
                         console.log('[DEBUG] 生成 clientId:', clientId);
 
+                        // 立即显示进度弹窗（不依赖后端 WebSocket 消息）
+                        if (!window.scanProgressModal) {
+                            window.scanProgressModal = createScanProgressModal();
+                            document.body.appendChild(window.scanProgressModal);
+                        }
+
                         connectScanWebSocket(clientId);
 
-                        await new Promise(resolve => setTimeout(resolve, 200));
+                        await new Promise(resolve => setTimeout(resolve, 300));
 
                         try {
                             console.log('[DEBUG] 调用 importFolderAsync API');
