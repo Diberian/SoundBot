@@ -1115,62 +1115,87 @@ async def get_waveform(path: str = Query(..., description="音频文件路径"))
     """
     获取音频波形数据
 
-    将原始波形降采样到 2000 个峰值点，用于前端波形显示
+    优先从 SQLite 数据库读取缓存的波形数据，如果没有则实时计算并缓存。
+    将原始波形降采样到 2000 个峰值点，用于前端波形显示。
 
     返回格式：
     {
         "peaks": [0.1, 0.4, -0.3, ...],  # 降采样后的峰值数组
         "duration": 12.4,                  # 时长（秒）
         "sample_rate": 48000,               # 采样率
-        "channels": 2                       # 声道数
+        "channels": 2,                       # 声道数
+        "cached": true                       # 是否从缓存读取
     }
     """
     import urllib.parse
     import librosa
     import numpy as np
+    import soundfile as sf
 
     file_path = urllib.parse.unquote(path)
-
     audio_file = config.validate_audio_path(file_path)
-    
+
     try:
-        # 加载音频
-        y, sr = librosa.load(str(audio_file), sr=None, mono=False)
-        
-        # 获取基本信息
-        duration = librosa.get_duration(y=y, sr=sr)
-        channels = 1 if y.ndim == 1 else y.shape[0]
-        
-        # 转换为单声道进行波形处理
-        y_mono = librosa.to_mono(y)
-        
+        # 首先尝试从数据库获取缓存的波形数据
+        db_manager = get_db_manager()
+        record = db_manager.get_file(file_path)
+
+        if record and record.peaks_json:
+            # 使用缓存的波形数据
+            logger.debug(f"波形数据从缓存读取: {file_path}")
+            return {
+                "peaks": record.get_peaks(),
+                "duration": record.duration,
+                "sample_rate": record.sample_rate,
+                "channels": record.channels,
+                "cached": True
+            }
+
+        # 没有缓存，实时计算
+        logger.info(f"波形数据未缓存，实时计算: {file_path}")
+
+        # 使用 soundfile 获取基本信息（比 librosa 更快）
+        info = sf.info(str(audio_file))
+        duration = info.duration
+        sr = info.samplerate
+        channels = info.channels
+
+        # 加载音频计算波形
+        y, sr = librosa.load(str(audio_file), sr=None, mono=True)  # 直接转单声道，节省内存
+
         # 降采样到 2000 个点
         target_points = 2000
-        samples_per_point = len(y_mono) // target_points
-        
+        samples_per_point = len(y) // target_points
+
         if samples_per_point > 0:
             # 计算每个区间的峰值（绝对值最大）
             peaks = []
             for i in range(target_points):
                 start = i * samples_per_point
-                end = min((i + 1) * samples_per_point, len(y_mono))
-                segment = y_mono[start:end]
+                end = min((i + 1) * samples_per_point, len(y))
+                segment = y[start:end]
                 if len(segment) > 0:
-                    peak = np.max(np.abs(segment))
-                    peaks.append(float(peak))
+                    peak = float(np.max(np.abs(segment)))
+                    peaks.append(peak)
                 else:
                     peaks.append(0.0)
         else:
             # 如果音频太短，直接返回全部数据
-            peaks = y_mono.tolist()[:target_points]
-        
+            peaks = y.tolist()[:target_points]
+
+        # 保存到数据库缓存
+        if record:
+            db_manager.update_peaks(file_path, peaks)
+            logger.debug(f"波形数据已缓存到数据库: {file_path}")
+
         return {
             "peaks": peaks,
             "duration": duration,
             "sample_rate": sr,
-            "channels": channels
+            "channels": channels,
+            "cached": False
         }
-        
+
     except Exception as e:
         logger.error(f"获取波形失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))

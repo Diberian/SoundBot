@@ -63,26 +63,30 @@ class LRUCache:
     特性：
     - 基于 OrderedDict 实现 O(1) 复杂度的 LRU 操作
     - 线程安全
-    - 最大容量 100 个文件
+    - 最大容量 20 个文件（降低内存占用）
+    - 支持内存上限限制（默认 500MB）
     - 支持缓存统计
     """
 
-    MAX_SIZE = 100  # 最大缓存文件数
+    MAX_SIZE = 20  # 最大缓存文件数（从100降低到20，减少内存占用）
+    MAX_MEMORY_MB = 500  # 最大内存占用 500MB
 
-    def __init__(self, max_size: int = MAX_SIZE):
+    def __init__(self, max_size: int = MAX_SIZE, max_memory_mb: int = MAX_MEMORY_MB):
         """
         初始化 LRU 缓存
 
         Args:
-            max_size: 最大缓存文件数，默认 100
+            max_size: 最大缓存文件数，默认 20
+            max_memory_mb: 最大内存占用(MB)，默认 500
         """
         self._cache: OrderedDict[str, AudioCacheEntry] = OrderedDict()
         self._lock = threading.RLock()
         self._max_size = max_size
+        self._max_memory_mb = max_memory_mb
         self._hits = 0        # 命中次数
         self._misses = 0      # 未命中次数
         self._total_evictions = 0  # 总踢出次数
-        _get_logger().info(f"LRUCache 初始化完成，最大容量: {max_size} 个文件")
+        _get_logger().info(f"LRUCache 初始化完成，最大容量: {max_size} 个文件, 内存上限: {max_memory_mb}MB")
 
     def get(self, file_path: str) -> Optional[AudioCacheEntry]:
         """
@@ -112,12 +116,16 @@ class LRUCache:
                 _get_logger().debug(f"缓存未命中: {file_path}")
                 return None
 
+    def _get_current_memory_mb(self) -> float:
+        """获取当前缓存占用的内存（MB）"""
+        return sum(e.memory_size for e in self._cache.values()) / (1024 * 1024)
+
     def put(self, file_path: str, entry: AudioCacheEntry) -> None:
         """
         放入缓存条目
 
         如果 key 已存在，更新值并移到末尾
-        如果缓存满，先踢出最久未访问的条目
+        如果缓存满或超过内存上限，先踢出最久未访问的条目
 
         Args:
             file_path: 文件路径
@@ -128,8 +136,17 @@ class LRUCache:
             if file_path in self._cache:
                 del self._cache[file_path]
 
-            # 如果缓存满，踢出最久未访问的
-            if len(self._cache) >= self._max_size:
+            entry_memory_mb = entry.memory_size / (1024 * 1024)
+
+            # 检查内存上限：踢出足够多的旧条目
+            current_memory_mb = self._get_current_memory_mb()
+            while (current_memory_mb + entry_memory_mb > self._max_memory_mb and
+                   len(self._cache) > 0):
+                self._evict_oldest()
+                current_memory_mb = self._get_current_memory_mb()
+
+            # 检查数量上限
+            while len(self._cache) >= self._max_size:
                 self._evict_oldest()
 
             # 添加新条目
@@ -138,7 +155,8 @@ class LRUCache:
             self._cache.move_to_end(file_path)
 
             _get_logger().debug(
-                f"缓存已添加: {file_path}, 当前大小: {len(self._cache)}"
+                f"缓存已添加: {file_path}, 当前大小: {len(self._cache)}, "
+                f"内存占用: {self._get_current_memory_mb():.1f}MB"
             )
 
     def _evict_oldest(self) -> Optional[str]:
