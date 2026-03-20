@@ -1214,6 +1214,9 @@
             }
         }
 
+        // 文件夹展开状态缓存（避免重新渲染时丢失）
+        const folderExpandedState = new Map();
+
         function renderFolderTree() {
             const container = document.getElementById('folderTree');
             container.innerHTML = '';
@@ -1244,6 +1247,40 @@
                     unclassifiedDiv.appendChild(createImportedFolderItem(folder, 0, true));
                 });
                 container.appendChild(unclassifiedDiv);
+            }
+
+            lucide.createIcons();
+        }
+
+        // 局部更新文件夹展开状态（不重新渲染整个树）
+        function toggleFolderExpand(folderId, element) {
+            const currentState = folderExpandedState.get(folderId) !== false;
+            const newState = !currentState;
+            folderExpandedState.set(folderId, newState);
+
+            console.log('[FOLDER] 切换展开状态:', folderId, currentState, '->', newState);
+
+            // 只更新这个文件夹的UI
+            const toggleIcon = element.querySelector('.folder-toggle');
+            const childrenContainer = element.querySelector('.folder-children');
+
+            if (toggleIcon) {
+                // 旋转图标
+                const svg = toggleIcon.querySelector('svg');
+                if (svg) {
+                    if (newState) {
+                        svg.classList.add('rotate-90');
+                    } else {
+                        svg.classList.remove('rotate-90');
+                    }
+                }
+            }
+
+            if (childrenContainer) {
+                childrenContainer.style.display = newState ? 'block' : 'none';
+                console.log('[FOLDER] 子容器显示状态:', childrenContainer.style.display);
+            } else {
+                console.warn('[FOLDER] 未找到子容器:', folderId);
             }
         }
 
@@ -1280,13 +1317,17 @@
             // 获取该文件夹下的导入文件夹
             const childFolders = importedFolderData.filter(f => folderMappings[f.fullPath] === folder.id);
             const hasChildren = childFolders.length > 0;
-            const expanded = folder.expanded !== false;
+            // 从缓存获取展开状态，默认展开
+            const expanded = folderExpandedState.get(folder.id) !== false;
 
             const folderColor = folder.color || '#3b82f6';
 
+            // 所有用户文件夹都显示展开按钮（即使没有子项，也可以展开后显示空状态）
             div.innerHTML = `
-                <div class="flex items-center gap-2 py-2 px-2 rounded-md hover:bg-white/5 group">
-                    ${hasChildren ? `<i data-lucide="${expanded ? 'chevron-down' : 'chevron-right'}" class="w-4 h-4 opacity-50 folder-toggle"></i>` : '<span class="w-4"></span>'}
+                <div class="flex items-center gap-2 py-2 px-2 rounded-md hover:bg-white/5 group folder-header">
+                    <span class="folder-toggle w-4 h-4 flex items-center justify-center cursor-pointer hover:bg-white/10 rounded transition-transform duration-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="transition-transform duration-200 ${expanded ? 'rotate-90' : ''}"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                    </span>
                     <i data-lucide="folder" class="w-4 h-4 opacity-70" style="color: ${folderColor};"></i>
                     <span class="text-sm flex-1 truncate">${folder.name}</span>
                     <span class="text-xs opacity-50">${folder.total_file_count || 0}</span>
@@ -1295,17 +1336,16 @@
 
             // 展开/折叠
             const toggleBtn = div.querySelector('.folder-toggle');
-            if (toggleBtn) {
-                toggleBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    folder.expanded = !expanded;
-                    renderFolderTree();
-                    lucide.createIcons();
-                });
-            }
+            toggleBtn.style.cursor = 'pointer';
+            toggleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('[FOLDER] 点击展开按钮:', folder.id);
+                toggleFolderExpand(folder.id, div);
+            });
 
             // 点击文件夹筛选
-            div.addEventListener('click', (e) => {
+            div.querySelector('.folder-header').addEventListener('click', (e) => {
                 // 如果点击的是展开按钮，不执行筛选
                 if (e.target.closest('.folder-toggle')) return;
 
@@ -1326,18 +1366,20 @@
                 showFolderContextMenu(e, folder, 'user');
             });
 
-            // 渲染子文件夹和音频文件
-            if (hasChildren && expanded) {
-                const childrenContainer = document.createElement('div');
-                childrenContainer.style.marginLeft = '16px';
+            // 渲染子文件夹和音频文件（始终创建容器，但控制显示/隐藏）
+            const childrenContainer = document.createElement('div');
+            childrenContainer.className = 'folder-children';
+            childrenContainer.style.marginLeft = '16px';
+            childrenContainer.style.display = expanded ? 'block' : 'none';
 
-                // 渲染子文件夹
+            // 渲染子文件夹
+            if (hasChildren) {
                 childFolders.forEach(child => {
                     childrenContainer.appendChild(createImportedFolderItem(child, 1, false));
                 });
-
-                div.appendChild(childrenContainer);
             }
+
+            div.appendChild(childrenContainer);
 
             return div;
         }
@@ -1363,7 +1405,7 @@
             if (type === 'user') {
                 // 用户文件夹菜单
                 menuItems.push(
-                    { label: '新建文件夹', icon: 'folder-plus', action: () => showInputModal('新建文件夹', '请输入文件夹名称:', (name) => { if (name) createUserFolder(name); }) },
+                    { label: '新建同级文件夹', icon: 'folder-plus', action: () => showInputModal('新建文件夹', '请输入文件夹名称:', (name) => { if (name) createUserFolder(name); }) },
                     { label: '重命名', icon: 'edit-3', action: () => showInputModal('重命名文件夹', '请输入新名称:', (name) => { if (name) renameUserFolder(folder.id, name); }, folder.name) },
                     { label: '删除', icon: 'trash-2', action: () => { if (confirm(`确定要删除文件夹 "${folder.name}" 吗？\n\n注意：删除文件夹不会删除音频文件，只是移除分类。`)) deleteUserFolder(folder.id); }, danger: true }
                 );
@@ -1416,14 +1458,29 @@
             const folderFiles = soundData.filter(s => s.folderPath === folder.path);
             const hasFiles = folderFiles.length > 0;
 
+            // 递归获取所有子文件夹
+            function getAllChildren(node) {
+                let children = [];
+                if (node.children && node.children.length > 0) {
+                    node.children.forEach(child => {
+                        children.push(child);
+                        children = children.concat(getAllChildren(child));
+                    });
+                }
+                return children;
+            }
+
+            const allChildren = getAllChildren(folder);
             const hasChildren = folder.children && folder.children.length > 0;
-            const expanded = folder.expanded !== false;
-            const hasContent = hasChildren || hasFiles;
-            const expandIcon = hasContent ? (expanded ? 'chevron-down' : 'chevron-right') : 'minus';
+            // 从缓存获取展开状态，默认展开
+            const expanded = folderExpandedState.get(folder.fullPath) !== false;
+            const hasContent = hasChildren || hasFiles || allChildren.length > 0;
 
             div.innerHTML = `
-                <div class="flex items-center gap-1.5 py-1 px-1.5 rounded-md hover:bg-white/5">
-                    <i data-lucide="${expandIcon}" class="w-3 h-3 opacity-40 folder-toggle"></i>
+                <div class="flex items-center gap-1.5 py-1 px-1.5 rounded-md hover:bg-white/5 folder-header">
+                    <span class="folder-toggle w-3 h-3 flex items-center justify-center cursor-pointer hover:bg-white/10 rounded transition-transform duration-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="transition-transform duration-200 ${expanded ? 'rotate-90' : ''}"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                    </span>
                     <i data-lucide="folder-open" class="w-3 h-3 opacity-60"></i>
                     <span class="text-xs flex-1 truncate">${folder.name}</span>
                     ${folder.count !== undefined ? `<span class="text-[10px] opacity-40">${folder.count}</span>` : ''}
@@ -1432,17 +1489,15 @@
 
             // 展开/折叠
             const toggleBtn = div.querySelector('.folder-toggle');
-            if (toggleBtn && hasContent) {
+            if (toggleBtn) {
                 toggleBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    folder.expanded = !expanded;
-                    renderFolderTree();
-                    lucide.createIcons();
+                    toggleFolderExpand(folder.fullPath, div);
                 });
             }
 
             // 点击筛选
-            div.addEventListener('click', (e) => {
+            div.querySelector('.folder-header').addEventListener('click', (e) => {
                 // 如果点击的是展开按钮，不执行筛选
                 if (e.target.closest('.folder-toggle')) return;
 
@@ -1466,41 +1521,40 @@
             });
 
             // 渲染子文件夹和音频文件
-            if (expanded) {
-                const childrenContainer = document.createElement('div');
-                childrenContainer.style.marginLeft = '8px';
+            const childrenContainer = document.createElement('div');
+            childrenContainer.className = 'folder-children';
+            childrenContainer.style.marginLeft = '8px';
+            childrenContainer.style.display = expanded ? 'block' : 'none';
 
-                // 渲染子文件夹
-                if (hasChildren) {
-                    folder.children.forEach(child => {
-                        childrenContainer.appendChild(createImportedFolderItem(child, level + 1, false));
+            // 渲染子文件夹（递归）
+            if (hasChildren) {
+                folder.children.forEach(child => {
+                    childrenContainer.appendChild(createImportedFolderItem(child, level + 1, false));
+                });
+            }
+
+            // 渲染音频文件
+            if (hasFiles) {
+                folderFiles.forEach(file => {
+                    const fileDiv = document.createElement('div');
+                    fileDiv.className = 'sidebar-item rounded-md cursor-pointer';
+                    fileDiv.style.paddingLeft = `${(level + 1) * 12 + 8}px`;
+                    fileDiv.innerHTML = `
+                        <div class="flex items-center gap-1 py-0.5 px-1 rounded-md hover:bg-white/5">
+                            <i data-lucide="music" class="w-3 h-3 opacity-40"></i>
+                            <span class="text-[10px] flex-1 truncate opacity-70">${file.filename}</span>
+                        </div>
+                    `;
+                    fileDiv.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        playSound(file.id);
                     });
-                }
+                    childrenContainer.appendChild(fileDiv);
+                });
+            }
 
-                // 渲染音频文件
-                if (hasFiles) {
-                    folderFiles.forEach(file => {
-                        const fileDiv = document.createElement('div');
-                        fileDiv.className = 'sidebar-item rounded-md cursor-pointer';
-                        fileDiv.style.paddingLeft = `${(level + 1) * 12 + 8}px`;
-                        fileDiv.innerHTML = `
-                            <div class="flex items-center gap-1 py-0.5 px-1 rounded-md hover:bg-white/5">
-                                <i data-lucide="music" class="w-3 h-3 opacity-40"></i>
-                                <span class="text-[10px] flex-1 truncate opacity-70">${file.filename}</span>
-                            </div>
-                        `;
-                        fileDiv.addEventListener('click', (e) => {
-                            e.stopPropagation();
-                            // 播放或选中这个文件
-                            playSound(file.id);
-                        });
-                        childrenContainer.appendChild(fileDiv);
-                    });
-                }
-
-                if (childrenContainer.children.length > 0) {
-                    div.appendChild(childrenContainer);
-                }
+            if (childrenContainer.children.length > 0) {
+                div.appendChild(childrenContainer);
             }
 
             return div;
