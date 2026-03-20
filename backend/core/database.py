@@ -256,11 +256,12 @@ class DatabaseManager:
                         settings_json TEXT DEFAULT '{}'
                     )
                 """)
-                # 插入默认工程
-                cursor.execute("""
-                    INSERT OR IGNORE INTO projects (id, name, description)
-                    VALUES ('default', '默认工程', '系统默认工程')
-                """)
+
+            # 确保默认工程存在（无论表是否刚创建）
+            cursor.execute("""
+                INSERT OR IGNORE INTO projects (id, name, description)
+                VALUES ('default', '默认工程', '系统默认工程')
+            """)
 
             # 3. 创建 recent_projects 表（如果不存在）
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='recent_projects'")

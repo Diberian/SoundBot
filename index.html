@@ -1080,7 +1080,13 @@
                         currentBlobUrl = null;
                     }
                     updatePlaybackUI();
-                    renderSoundList(document.getElementById('searchInput').value);
+                    // 如果有搜索结果，保持显示搜索结果；否则显示正常列表
+                    const searchQuery = document.getElementById('searchInput').value.trim();
+                    if (searchQuery && allSearchResults.length > 0) {
+                        renderSoundList('', allSearchResults);
+                    } else {
+                        renderSoundList(searchQuery);
+                    }
                 }
             });
             audioPlayer.addEventListener('timeupdate', () => {
@@ -1238,7 +1244,13 @@
                 }
 
                 updatePlaybackUI();
-                renderSoundList(document.getElementById('searchInput').value);
+                // 如果有搜索结果，保持显示搜索结果；否则显示正常列表
+                const searchQuery = document.getElementById('searchInput').value.trim();
+                if (searchQuery && allSearchResults.length > 0) {
+                    renderSoundList('', allSearchResults);
+                } else {
+                    renderSoundList(searchQuery);
+                }
 
             } catch (error) {
                 console.error('[loadAndPlaySound] 总体错误:', error);
