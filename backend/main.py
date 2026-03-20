@@ -24,8 +24,15 @@ from core.indexer import get_indexer, AudioIndexer, reset_indexer
 from core.searcher import get_searcher, AudioSearcher, reset_searcher
 from core.embedder import get_embedder, reset_embedder, is_embedder_available
 from core.database import get_db_manager, reset_db_manager, AudioFileRecord
-from core.websocket_manager import get_ws_manager, reset_ws_manager
+from core.websocket_manager import (
+    get_ws_manager,
+    reset_ws_manager,
+    broadcast_playback_state,
+    register_playback_client,
+    unregister_playback_client
+)
 from core.audio_cache import get_audio_cache, reset_audio_cache
+from core.playback_manager import get_playback_manager, reset_playback_manager
 from utils.logger import logger
 
 # 线程池用于 CPU 密集型任务
@@ -71,6 +78,7 @@ async def lifespan(app: FastAPI):
 
     logger.info("SoundMind API 关闭中...")
     logger.info("临时文件由用户自行管理，不执行自动清理")
+    reset_playback_manager()  # 关闭播放管理器
     reset_audio_cache()  # 清理 LRU 缓存
     reset_embedder()
     reset_indexer()
@@ -145,6 +153,70 @@ async def websocket_scan_progress(websocket: WebSocket, client_id: str):
         ws_manager.disconnect(websocket, client_id)
 
 
+@app.websocket("/ws/playback/{client_id}")
+async def websocket_playback_state(websocket: WebSocket, client_id: str):
+    """
+    WebSocket 端点：接收播放状态实时推送
+
+    前端通过此 WebSocket 接收播放状态更新。
+
+    发送消息格式:
+    - playback_state: {"position": 3.2, "duration": 12.4, "is_playing": true}
+    """
+    logger.info(f"[WS Playback] WebSocket 连接尝试: client_id={client_id}")
+    await websocket.accept()
+    logger.info(f"[WS Playback] WebSocket 连接成功: client_id={client_id}")
+
+    # 注册到广播列表
+    await register_playback_client(client_id, websocket)
+
+    # 设置播放管理器的状态回调
+    playback = get_playback_manager()
+
+    async def state_callback(state: dict):
+        """播放状态回调"""
+        try:
+            await websocket.send_json(state)
+        except Exception:
+            pass
+
+    playback.set_state_callback(state_callback)
+
+    # 发送当前状态
+    status = playback.get_status()
+    await websocket.send_json({
+        "position": status["position"],
+        "duration": status["duration"],
+        "is_playing": status["is_playing"]
+    })
+
+    try:
+        while True:
+            # 接收客户端消息（心跳等）
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            msg_type = message.get("type", "")
+
+            if msg_type == "ping":
+                await websocket.send_json({"type": "pong"})
+            elif msg_type == "get_status":
+                status = playback.get_status()
+                await websocket.send_json({
+                    "position": status["position"],
+                    "duration": status["duration"],
+                    "is_playing": status["is_playing"]
+                })
+
+    except WebSocketDisconnect:
+        logger.info(f"[WS Playback] WebSocket 断开: client_id={client_id}")
+        await unregister_playback_client(client_id, websocket)
+    except json.JSONDecodeError:
+        logger.warning(f"[WS Playback] 无效的 JSON 消息 from {client_id}")
+    except Exception as e:
+        logger.error(f"[WS Playback] WebSocket 错误: {e}")
+        await unregister_playback_client(client_id, websocket)
+
+
 # ==================== 健康检查 ====================
 
 @app.get("/api/v1/health", response_model=schemas.HealthResponse)
@@ -205,6 +277,212 @@ async def clear_cache():
         "cleared_count": cleared_count,
         "message": f"缓存已清空，共 {cleared_count} 个条目"
     }
+
+
+# ==================== 流式播放控制 ====================
+
+@app.post("/api/play", response_model=schemas.PlaybackResponse)
+async def play_audio(request: schemas.PlayRequest):
+    """
+    开始播放音频文件
+
+    使用 sounddevice callback 模式实现真正的流式播放，不占用大量内存。
+
+    - **path**: 音频文件路径
+    - **start**: 起始位置（秒），默认为 0
+
+    返回格式：
+    {
+        "success": true,
+        "state": "playing",
+        "file_path": "/path/to/file.wav",
+        "position": 0.0,
+        "duration": 12.4,
+        "is_playing": true,
+        "message": "开始播放"
+    }
+    """
+    try:
+        # 验证路径
+        path = config.validate_audio_path(request.path)
+
+        # 开始播放
+        playback = get_playback_manager()
+        status = playback.play(str(path), start=request.start)
+
+        return schemas.PlaybackResponse(
+            success=True,
+            state=status["state"],
+            file_path=status["file_path"],
+            position=status["position"],
+            duration=status["duration"],
+            is_playing=status["is_playing"],
+            message="开始播放"
+        )
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        logger.error(f"播放失败: {e}")
+        raise HTTPException(status_code=500, detail=f"播放失败: {e}")
+
+
+@app.post("/api/pause", response_model=schemas.PlaybackResponse)
+async def pause_audio():
+    """
+    暂停播放
+
+    返回格式：
+    {
+        "success": true,
+        "state": "paused",
+        "file_path": "/path/to/file.wav",
+        "position": 5.2,
+        "duration": 12.4,
+        "is_playing": false,
+        "message": "已暂停"
+    }
+    """
+    playback = get_playback_manager()
+    status = playback.pause()
+
+    return schemas.PlaybackResponse(
+        success=True,
+        state=status["state"],
+        file_path=status["file_path"],
+        position=status["position"],
+        duration=status["duration"],
+        is_playing=status["is_playing"],
+        message="已暂停" if status["is_playing"] else "播放已暂停"
+    )
+
+
+@app.post("/api/resume", response_model=schemas.PlaybackResponse)
+async def resume_audio():
+    """
+    继续播放（从暂停状态恢复）
+
+    返回格式：
+    {
+        "success": true,
+        "state": "playing",
+        "file_path": "/path/to/file.wav",
+        "position": 5.2,
+        "duration": 12.4,
+        "is_playing": true,
+        "message": "继续播放"
+    }
+    """
+    playback = get_playback_manager()
+    status = playback.resume()
+
+    return schemas.PlaybackResponse(
+        success=True,
+        state=status["state"],
+        file_path=status["file_path"],
+        position=status["position"],
+        duration=status["duration"],
+        is_playing=status["is_playing"],
+        message="继续播放" if status["is_playing"] else "继续播放失败"
+    )
+
+
+@app.post("/api/stop", response_model=schemas.PlaybackResponse)
+async def stop_audio():
+    """
+    停止播放
+
+    返回格式：
+    {
+        "success": true,
+        "state": "idle",
+        "file_path": "",
+        "position": 0.0,
+        "duration": 0.0,
+        "is_playing": false,
+        "message": "已停止"
+    }
+    """
+    playback = get_playback_manager()
+    status = playback.stop()
+
+    return schemas.PlaybackResponse(
+        success=True,
+        state=status["state"],
+        file_path=status["file_path"],
+        position=status["position"],
+        duration=status["duration"],
+        is_playing=status["is_playing"],
+        message="已停止"
+    )
+
+
+@app.post("/api/seek", response_model=schemas.PlaybackResponse)
+async def seek_audio(request: schemas.SeekRequest):
+    """
+    跳转到指定位置
+
+    - **position**: 目标位置（秒）
+
+    返回格式：
+    {
+        "success": true,
+        "state": "playing",
+        "file_path": "/path/to/file.wav",
+        "position": 5.5,
+        "duration": 12.4,
+        "is_playing": true,
+        "message": "已跳转"
+    }
+    """
+    try:
+        playback = get_playback_manager()
+        status = playback.seek(request.position)
+
+        return schemas.PlaybackResponse(
+            success=True,
+            state=status["state"],
+            file_path=status["file_path"],
+            position=status["position"],
+            duration=status["duration"],
+            is_playing=status["is_playing"],
+            message="已跳转"
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/playback/status", response_model=schemas.PlaybackResponse)
+async def get_playback_status():
+    """
+    获取当前播放状态
+
+    返回格式：
+    {
+        "success": true,
+        "state": "playing",
+        "file_path": "/path/to/file.wav",
+        "position": 3.2,
+        "duration": 12.4,
+        "is_playing": true,
+        "message": null
+    }
+    """
+    playback = get_playback_manager()
+    status = playback.get_status()
+
+    return schemas.PlaybackResponse(
+        success=True,
+        state=status["state"],
+        file_path=status["file_path"],
+        position=status["position"],
+        duration=status["duration"],
+        is_playing=status["is_playing"],
+        message=None
+    )
 
 
 @app.get("/api/v1/cache/check/{file_path:path}")

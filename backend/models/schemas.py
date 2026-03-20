@@ -166,3 +166,27 @@ class TempDirResponse(BaseModel):
     temp_dir: str = Field(..., description="当前临时文件目录")
     default_dir: str = Field(..., description="默认临时文件目录")
     message: Optional[str] = Field(None, description="消息")
+
+
+# ==================== 播放控制请求模型 ====================
+
+class PlayRequest(BaseModel):
+    """播放请求"""
+    path: str = Field(..., description="音频文件路径")
+    start: float = Field(default=0.0, ge=0, description="起始位置（秒）")
+
+
+class SeekRequest(BaseModel):
+    """跳转请求"""
+    position: float = Field(..., ge=0, description="目标位置（秒）")
+
+
+class PlaybackResponse(BaseModel):
+    """播放状态响应"""
+    success: bool = Field(..., description="是否成功")
+    state: str = Field(..., description="当前状态: idle/playing/paused")
+    file_path: str = Field(default="", description="当前播放文件")
+    position: float = Field(..., description="当前播放位置（秒）")
+    duration: float = Field(..., description="音频总时长（秒）")
+    is_playing: bool = Field(..., description="是否正在播放")
+    message: Optional[str] = Field(None, description="消息")
