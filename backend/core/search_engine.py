@@ -148,6 +148,13 @@ class OptimizedAudioSearcher(AudioSearcher):
     """
 
     def __init__(self, *args, **kwargs):
+        # 使用工程目录而非 db 目录
+        persist_directory = kwargs.get('persist_directory')
+        if persist_directory is None:
+            from config import get_chroma_db_path, CURRENT_PROJECT_ID
+            persist_directory = str(get_chroma_db_path(CURRENT_PROJECT_ID))
+        kwargs['persist_directory'] = persist_directory
+
         super().__init__(*args, **kwargs)
         self._query_cache = QueryCache(max_size=100, ttl=3600)
         self._text_processor = ChineseTextProcessor()

@@ -1902,11 +1902,17 @@
                 (sound.tags && sound.tags.some(tag => tag.toLowerCase().includes(filter.toLowerCase())))
             );
             
-            // 空状态提示
+            // 空状态提示 - 区分无文件和搜索无结果
             if (filteredSounds.length === 0) {
                 const emptyDiv = document.createElement('div');
                 emptyDiv.className = 'flex items-center justify-center h-full';
-                emptyDiv.innerHTML = `<span class="text-sm opacity-40" style="color: var(--text-secondary);">请导入音频文件</span>`;
+                if (soundData.length === 0) {
+                    // 没有导入任何文件
+                    emptyDiv.innerHTML = `<span class="text-sm opacity-40" style="color: var(--text-secondary);">请导入音频文件</span>`;
+                } else {
+                    // 有文件但搜索无结果
+                    emptyDiv.innerHTML = `<span class="text-sm opacity-40" style="color: var(--text-secondary);">未检索到结果</span>`;
+                }
                 container.appendChild(emptyDiv);
                 return;
             }
