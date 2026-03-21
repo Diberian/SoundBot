@@ -31,12 +31,14 @@ if DEBUG:
         "http://localhost:*",
         "electron://*",
         "file://*",
+        "null",  # Electron file:// 协议的 origin 有时是 null
     ]
 else:
     CORS_ORIGINS = [
         "http://127.0.0.1:*",
         "http://localhost:*",
         "electron://*",
+        "null",  # Electron file:// 协议的 origin 有时是 null
     ]
 
 # ==================== 模型配置 ====================

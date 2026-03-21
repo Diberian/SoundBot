@@ -3265,7 +3265,18 @@
             } catch (error) {
                 console.error('AI Chat 错误:', error);
                 removeLoadingMessage();
-                addChatMessage(`抱歉，发生了错误：${error.message}。请检查 AI 服务是否正常运行。`);
+                
+                // 提供更友好的错误信息
+                let errorMsg = '抱歉，AI 服务暂时不可用。';
+                if (error.message && error.message.includes('fetch')) {
+                    errorMsg += '请检查后端服务是否已启动（端口 8000）。';
+                } else if (error.message) {
+                    errorMsg += `错误信息：${error.message}`;
+                } else {
+                    errorMsg += '请检查 AI 服务配置是否正确。';
+                }
+                
+                addChatMessage(errorMsg);
             } finally {
                 isAiResponding = false;
             }
@@ -3418,6 +3429,12 @@
         async function loadAiConfig() {
             try {
                 const response = await fetch('http://127.0.0.1:8000/api/v1/ai/config');
+                
+                if (!response.ok) {
+                    console.warn('[AI Config] 后端服务未启动或配置接口不可用');
+                    return false;
+                }
+                
                 const data = await response.json();
 
                 if (data.success) {
@@ -3524,9 +3541,11 @@
                     document.getElementById('externalEmbeddingKey').value = extEmbConfig.api_key || '';
                     document.getElementById('externalEmbeddingModel').value = extEmbConfig.model || '';
                 }
+                return true;
             } catch (error) {
                 console.error('加载 AI 配置失败:', error);
-                showNotification('加载 AI 配置失败', 'error');
+                // 不显示错误通知，因为后端可能还未启动
+                return false;
             }
         }
 

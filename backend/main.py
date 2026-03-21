@@ -2762,8 +2762,14 @@ async def ai_chat(request: schemas.AIChatRequest):
     - error: 错误
     - done: 完成
     """
+    from core.ai_chat_service import get_ai_chat_service, stream_to_sse
+    from core.llm_client import get_llm_client
+    
     try:
-        from core.ai_chat_service import get_ai_chat_service, stream_to_sse
+        # 检查 LLM 服务是否可用
+        llm_client = get_llm_client()
+        if not llm_client.is_available:
+            logger.warning("AI Chat 请求时 LLM 服务不可用，将使用降级模式")
         
         chat_service = get_ai_chat_service()
         
@@ -2783,7 +2789,9 @@ async def ai_chat(request: schemas.AIChatRequest):
         )
     except Exception as e:
         logger.error(f"AI Chat 请求失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        logger.error(f"详细错误: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"AI 服务暂时不可用: {str(e)}")
 
 
 @app.get("/api/v1/ai/config")

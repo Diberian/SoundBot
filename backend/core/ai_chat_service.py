@@ -231,6 +231,11 @@ class AIChatService:
         Returns:
             QueryAnalysis 分析结果
         """
+        # 首先检查 LLM 是否可用
+        if not self.llm_client.is_available:
+            logger.warning("LLM 服务不可用，使用降级分析")
+            return self._fallback_analysis(message)
+        
         # 构建消息
         messages = []
         
@@ -244,17 +249,22 @@ class AIChatService:
         # 调用 LLM
         full_response = ""
         
-        async for chunk in self.llm_client.chat(
-            messages=messages,
-            system_prompt=SYSTEM_PROMPT,
-            temperature=0.3,  # 较低的 temperature 以获得更稳定的 JSON
-            max_tokens=512,
-            stream=True
-        ):
-            if chunk["type"] == "content":
-                full_response += chunk["content"]
-            elif chunk["type"] == "error":
-                raise RuntimeError(chunk["content"])
+        try:
+            async for chunk in self.llm_client.chat(
+                messages=messages,
+                system_prompt=SYSTEM_PROMPT,
+                temperature=0.3,  # 较低的 temperature 以获得更稳定的 JSON
+                max_tokens=512,
+                stream=True
+            ):
+                if chunk["type"] == "content":
+                    full_response += chunk["content"]
+                elif chunk["type"] == "error":
+                    logger.warning(f"LLM 调用返回错误: {chunk['content']}")
+                    return self._fallback_analysis(message)
+        except Exception as e:
+            logger.warning(f"LLM 调用失败: {e}，使用降级分析")
+            return self._fallback_analysis(message)
         
         # 解析 JSON
         try:

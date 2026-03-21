@@ -511,6 +511,11 @@ class LLMConfigManager:
             if api_key:
                 headers["Authorization"] = f"Bearer {api_key}"
             
+            # 合并自定义 headers（如 Kimi Coding 的 X-Kimi-Claw-ID）
+            custom_headers = provider_config.get("headers", {})
+            if custom_headers:
+                headers.update(custom_headers)
+            
             # LM Studio 和 Ollama 都支持 /models 端点
             models_url = base_url.rstrip("/") + "/models"
             

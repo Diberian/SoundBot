@@ -52,9 +52,10 @@ class LLMClient:
 
         # 特殊处理某些 provider
         if provider == "kimi_coding":
-            # Kimi Coding 需要特殊 headers
+            # Kimi Coding 需要特殊 headers（包含 X-Kimi-Claw-ID）
             self.headers = provider_cfg.get("headers", {
-                "User-Agent": "Kimi Claw Plugin"
+                "User-Agent": "Kimi Claw Plugin",
+                "X-Kimi-Claw-ID": ""
             })
         else:
             self.headers = {}
@@ -79,7 +80,14 @@ class LLMClient:
             url = self.base_url.rstrip("/") + "/models"
             response = requests.get(url, headers=headers, timeout=5)
             return response.status_code == 200
-        except:
+        except requests.exceptions.ConnectionError:
+            logger.warning(f"LLM 服务连接失败: {self.base_url}，请确保服务已启动")
+            return False
+        except requests.exceptions.Timeout:
+            logger.warning(f"LLM 服务连接超时: {self.base_url}")
+            return False
+        except Exception as e:
+            logger.warning(f"LLM 服务检查失败: {e}")
             return False
     
     async def chat(
