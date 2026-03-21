@@ -19,6 +19,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
+    <!-- i18n 国际化模块 -->
+    <script src="./assets/i18n.js"></script>
+    
     <style>
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -97,7 +100,7 @@
         
         <!-- Left: App Name Only -->
         <div class="flex items-center">
-            <span class="font-semibold text-lg tracking-tight">SoundBot</span>
+            <span class="font-semibold text-lg tracking-tight" data-i18n="app.name">SoundBot</span>
         </div>
         
         <!-- Center: Menu -->
@@ -105,20 +108,20 @@
             <!-- 文件菜单 -->
             <div class="relative">
                 <button id="fileMenuBtn" class="menu-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-1.5">
-                    <i data-lucide="file-text" class="w-4 h-4"></i>文件
+                    <i data-lucide="file-text" class="w-4 h-4"></i><span data-i18n="menu.file">文件</span>
                 </button>
                 <!-- 文件下拉菜单 -->
                 <div id="fileDropdown" class="dropdown-menu hidden absolute top-full left-0 mt-2 w-56 rounded-lg shadow-xl border py-2 z-50"
                      style="background-color: var(--bg-secondary); border-color: var(--border-color);">
-                    <div class="px-3 py-2 text-xs font-medium uppercase tracking-wider opacity-50">工程</div>
+                    <div class="px-3 py-2 text-xs font-medium uppercase tracking-wider opacity-50" data-i18n="lang.title">语言</div>
                     <button id="newProjectBtn" class="w-full px-4 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-2">
-                        <i data-lucide="folder-plus" class="w-4 h-4"></i>新建工程
+                        <i data-lucide="folder-plus" class="w-4 h-4"></i><span data-i18n="project.new">新建工程</span>
                     </button>
                     <button id="openProjectBtn" class="w-full px-4 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-2">
-                        <i data-lucide="folder-open" class="w-4 h-4"></i>打开工程
+                        <i data-lucide="folder-open" class="w-4 h-4"></i><span data-i18n="project.switch">打开工程</span>
                     </button>
                     <button id="recentProjectsBtn" class="w-full px-4 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-2">
-                        <i data-lucide="clock" class="w-4 h-4"></i>最近工程
+                        <i data-lucide="clock" class="w-4 h-4"></i><span data-i18n="project.recent">最近工程</span>
                     </button>
                     <div class="border-t my-2" style="border-color: var(--border-color);"></div>
                     <div class="px-3 py-2 text-xs font-medium uppercase tracking-wider opacity-50">当前工程</div>
@@ -144,40 +147,40 @@
             </div>
             <div class="relative">
                 <button id="settingsBtn" class="menu-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-1.5">
-                    <i data-lucide="settings" class="w-4 h-4"></i>设置
+                    <i data-lucide="settings" class="w-4 h-4"></i><span data-i18n="settings">设置</span>
                 </button>
                 <!-- Settings Dropdown -->
                 <div id="settingsDropdown" class="dropdown-menu hidden absolute top-full left-0 mt-2 w-64 rounded-lg shadow-xl border py-2 z-50"
                      style="background-color: var(--bg-secondary); border-color: var(--border-color);">
-                    <div class="px-3 py-2 text-xs font-medium uppercase tracking-wider opacity-50">语言</div>
+                    <div class="px-3 py-2 text-xs font-medium uppercase tracking-wider opacity-50" data-i18n="lang.title">语言</div>
                     <button class="w-full px-4 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-between setting-option" data-type="lang" data-value="zh">
-                        <span>中文</span><i data-lucide="check" class="w-4 h-4 check-icon"></i>
+                        <span data-i18n="lang.zh">中文</span><i data-lucide="check" class="w-4 h-4 check-icon"></i>
                     </button>
                     <button class="w-full px-4 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-between setting-option opacity-50" data-type="lang" data-value="en">
-                        <span>English</span><i data-lucide="check" class="w-4 h-4 check-icon hidden"></i>
+                        <span data-i18n="lang.en">English</span><i data-lucide="check" class="w-4 h-4 check-icon hidden"></i>
                     </button>
                     <div class="border-t my-2" style="border-color: var(--border-color);"></div>
-                    <div class="px-3 py-2 text-xs font-medium uppercase tracking-wider opacity-50">临时文件目录</div>
+                    <div class="px-3 py-2 text-xs font-medium uppercase tracking-wider opacity-50" data-i18n="settings.temp.dir">临时文件目录</div>
                     <button id="tempDirBtn" class="w-full px-4 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-2">
                         <i data-lucide="folder" class="w-4 h-4"></i>
-                        <span id="tempDirText" class="truncate">加载中...</span>
+                        <span id="tempDirText" class="truncate" data-i18n="loading">加载中...</span>
                     </button>
                     <div id="tempDirPermissionHint" class="px-3 py-1 text-xs opacity-60 hidden" style="color: var(--text-secondary);">
                         <i data-lucide="alert-triangle" class="w-3 h-3 inline mr-1"></i>
-                        此目录需要磁盘访问权限，点击重新选择以授权
+                        <span data-i18n="settings.temp.dir.permission">此目录需要磁盘访问权限，点击重新选择以授权</span>
                     </div>
                     <button id="resetTempDirBtn" class="w-full px-3 py-1 text-xs text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-1 opacity-60" style="color: var(--text-secondary);">
                         <i data-lucide="rotate-ccw" class="w-3 h-3"></i>
-                        恢复默认位置
+                        <span data-i18n="settings.temp.dir.reset">恢复默认位置</span>
                     </button>
                     <button id="clearTempClipsBtn" class="w-full px-3 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-2 text-red-500 hover:text-red-600 mt-1">
                         <i data-lucide="trash-2" class="w-4 h-4"></i>
-                        <span>清理临时裁切文件</span>
+                        <span data-i18n="settings.cache.clear">清理临时裁切文件</span>
                     </button>
                     <div class="border-t my-2" style="border-color: var(--border-color);"></div>
                     <button id="openAISettingsBtn" class="w-full px-4 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-2">
                         <i data-lucide="bot" class="w-4 h-4"></i>
-                        <span>AI 设置</span>
+                        <span data-i18n="settings.ai">AI 设置</span>
                     </button>
                     <div class="border-t my-2" style="border-color: var(--border-color);"></div>
                     <button id="themeToggle" class="w-full px-4 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-2">
@@ -227,12 +230,12 @@
                  style="background-color: var(--bg-tertiary); border-color: var(--border-color);"
                  title="当前文件夹所在磁盘剩余空间">
                 <i data-lucide="hard-drive" class="w-3.5 h-3.5"></i>
-                <span id="diskSpaceText">计算中...</span>
+                <span id="diskSpaceText" data-i18n="loading">计算中...</span>
             </div>
             
             <div class="relative">
                 <i data-lucide="search" id="searchIcon" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 opacity-50"></i>
-                <input type="text" id="searchInput" placeholder="搜索音效..."
+                <input type="text" id="searchInput" placeholder="搜索音效..." data-i18n-placeholder="search.placeholder"
                        class="w-64 h-9 pl-9 pr-8 rounded-lg text-sm border transition-all focus:outline-none focus:ring-2 focus:ring-gray-500/50"
                        style="background-color: var(--bg-tertiary); border-color: var(--border-color); color: var(--text-primary);">
                 <div id="searchLoadingSpinner" class="absolute right-2.5 top-1/2 -translate-y-1/2 hidden">
@@ -322,7 +325,7 @@
             </div>
             <div class="p-3 border-t" style="border-color: var(--border-color);">
                 <div class="relative">
-                    <textarea id="chatInput" rows="2" placeholder="输入你的需求..."
+                    <textarea id="chatInput" rows="2" placeholder="输入你的需求..." data-i18n-placeholder="ai.search.placeholder"
                               class="w-full px-3 py-2 pr-10 rounded-lg text-xs border resize-none transition-all focus:outline-none focus:ring-2 focus:ring-gray-500/50"
                               style="background-color: var(--bg-tertiary); border-color: var(--border-color); color: var(--text-primary);"></textarea>
                     <button id="sendMessage" class="absolute right-2 bottom-2 w-6 h-6 rounded-lg border flex items-center justify-center transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
@@ -3175,7 +3178,7 @@
                         <div class="rounded-2xl rounded-tl-sm px-3 py-2 text-xs" style="background-color: var(--bg-tertiary);">
                             <div class="flex items-center gap-2">
                                 <div class="w-3.5 h-3.5 rounded-full border-2 border-t-transparent animate-spin" style="border-color: var(--text-secondary); border-top-color: transparent;"></div>
-                                <span id="aiLoadingText">正在思考...</span>
+                                <span id="aiLoadingText" data-i18n="ai.search.loading">正在思考...</span>
                             </div>
                         </div>
                     </div>
@@ -4660,6 +4663,12 @@
                 btn.classList.toggle('opacity-50', !isSelected);
                 btn.querySelector('.check-icon').classList.toggle('hidden', !isSelected);
             });
+            
+            // 处理语言切换
+            if (type === 'lang') {
+                i18n.setLang(value);
+                showNotification(value === 'zh' ? '已切换到中文' : 'Switched to English', 'success');
+            }
         }
 
         // ==================== WEB SOCKET 管理 ====================
@@ -5261,6 +5270,13 @@
 
             // ==================== 工程管理事件监听 ====================
             initProjectManagement();
+            
+            // ==================== 初始化语言设置 ====================
+            // 从 localStorage 加载语言设置
+            const savedLang = localStorage.getItem('soundbot_language') || 'zh';
+            i18n.setLang(savedLang);
+            // 更新语言按钮状态
+            updateSetting('lang', savedLang);
 
             // Search - 支持本地和后端语义搜索（带分页加载）
             let searchTimeout = null;
@@ -6504,36 +6520,32 @@
                     <i data-lucide="folder-cog" class="w-5 h-5" style="color: var(--text-primary);"></i>
                 </div>
                 <div>
-                    <h2 class="text-lg font-semibold" style="color: var(--text-primary);">欢迎使用 SoundBot</h2>
-                    <p class="text-sm opacity-60" style="color: var(--text-secondary);">首次使用设置</p>
+                    <h2 class="text-lg font-semibold" style="color: var(--text-primary);" data-i18n="first.time.title">欢迎使用 SoundBot</h2>
+                    <p class="text-sm opacity-60" style="color: var(--text-secondary);" data-i18n="first.time.subtitle">首次使用设置</p>
                 </div>
             </div>
             
             <!-- 说明文字 -->
             <div class="mb-6 space-y-3">
-                <p class="text-sm leading-relaxed" style="color: var(--text-secondary);">
+                <p class="text-sm leading-relaxed" style="color: var(--text-secondary);" data-i18n="first.time.description">
                     请设置裁切音频文件的临时存放目录。所有裁切后的片段将保存在此目录中，您可以随时在设置中更改。
                 </p>
-                <div class="p-3 rounded-md text-xs" style="background-color: var(--bg-tertiary); color: var(--text-secondary);">
-                    <i data-lucide="info" class="w-3 h-3 inline mr-1"></i>
-                    提示：建议选择一个易于访问的文件夹，方便您管理和使用裁切后的音频文件。
-                </div>
             </div>
             
             <!-- 路径选择 -->
             <div class="mb-6">
-                <label class="block text-sm font-medium mb-2" style="color: var(--text-primary);">临时文件存放目录</label>
+                <label class="block text-sm font-medium mb-2" style="color: var(--text-primary);" data-i18n="settings.temp.dir">临时文件存放目录</label>
                 <div class="flex gap-2">
                     <div class="flex-1 px-3 py-2 rounded-md text-sm border truncate flex items-center"
                          style="background-color: var(--bg-primary); border-color: var(--border-color); color: var(--text-primary);"
-                         id="firstTimeTempDirPath">
+                         id="firstTimeTempDirPath" data-i18n="first.time.not.selected">
                         未选择
                     </div>
                     <button id="firstTimeSelectDirBtn" 
                             class="px-4 py-2 rounded-md text-sm font-medium transition-colors hover:opacity-80 flex items-center gap-2"
                             style="background-color: var(--text-primary); color: var(--bg-primary);">
                         <i data-lucide="folder-open" class="w-4 h-4"></i>
-                        选择文件夹
+                        <span data-i18n="first.time.select.dir">选择文件夹</span>
                     </button>
                 </div>
             </div>
@@ -6543,12 +6555,12 @@
                 <button id="firstTimeUseDefaultBtn"
                         class="px-4 py-2 rounded-md text-sm font-medium transition-colors hover:opacity-80"
                         style="background-color: var(--bg-tertiary); color: var(--text-secondary);">
-                    使用默认路径
+                    <span data-i18n="first.time.use.default">使用默认路径</span>
                 </button>
                 <button id="firstTimeConfirmBtn" disabled
                         class="px-4 py-2 rounded-md text-sm font-medium transition-colors opacity-50 cursor-not-allowed"
                         style="background-color: var(--text-primary); color: var(--bg-primary);">
-                    确认设置
+                    <span data-i18n="first.time.confirm">确认设置</span>
                 </button>
             </div>
         </div>
