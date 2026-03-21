@@ -23,7 +23,7 @@ function createWindow() {
     height: 900,
     minWidth: 1400,
     minHeight: 900,
-    title: 'SoundMind - AI 音效管理器',
+    title: 'SoundBot - AI 音效管理器',
     icon: path.join(__dirname, 'assets/icon.png'), // 可选：应用图标
     webPreferences: {
       nodeIntegration: false, // 禁用 Node.js 集成，确保安全

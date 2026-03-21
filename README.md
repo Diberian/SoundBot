@@ -1,11 +1,11 @@
-# SoundMind - AI 音效管理器桌面版
+# SoundBot - AI 音效管理器桌面版
 
 这是一个基于 Electron 的音效管理器桌面应用，将您的网页版音效管理器转换为原生桌面应用。
 
 ## 项目结构
 
 ```
-SoundMind/
+SoundBot/
 ├── package.json          # Electron 项目配置
 ├── main.js               # Electron 主进程
 ├── preload.js            # 安全桥接脚本
@@ -176,8 +176,8 @@ npm run build
 ```json
 {
   "build": {
-    "appId": "com.soundmind.app",
-    "productName": "SoundMind",
+    "appId": "com.soundbot.app",
+    "productName": "SoundBot",
     "directories": {
       "output": "dist"
     }

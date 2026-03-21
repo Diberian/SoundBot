@@ -1,4 +1,4 @@
-# SoundMind LLM 自然语言检索功能
+# SoundBot LLM 自然语言检索功能
 
 ## 功能概述
 

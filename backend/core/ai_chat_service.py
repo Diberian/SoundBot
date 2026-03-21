@@ -17,7 +17,7 @@ logger = get_logger(__name__)
 
 # ==================== 系统提示词 ====================
 
-SYSTEM_PROMPT = """你是 SoundMind 音效管理器的智能助手。
+SYSTEM_PROMPT = """你是 SoundBot 音效管理器的智能助手。
 
 ## 你的任务
 判断用户消息是"闲聊"还是"找音效"，然后按格式返回 JSON。

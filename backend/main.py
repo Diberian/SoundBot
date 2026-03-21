@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# SoundMind Backend
+# SoundBot Backend
 
 """FastAPI 后端服务，用于音效管理器的 AI 语义搜索功能。"""
 
@@ -53,7 +53,7 @@ def cleanup_old_clips(max_keep=100):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    logger.info(f"SoundMind API 启动中...")
+    logger.info(f"SoundBot API 启动中...")
     logger.info(f"设备: {config.get_device()}")
     logger.info(f"数据库路径: {config.get_db_path()}")
 
@@ -79,7 +79,7 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    logger.info("SoundMind API 关闭中...")
+    logger.info("SoundBot API 关闭中...")
     logger.info("临时文件由用户自行管理，不执行自动清理")
     reset_playback_manager()  # 关闭播放管理器
     reset_audio_cache()  # 清理 LRU 缓存
@@ -93,7 +93,7 @@ async def lifespan(app: FastAPI):
 
 # 创建 FastAPI 应用
 app = FastAPI(
-    title="SoundMind API",
+    title="SoundBot API",
     description="AI 音效管理器的语义搜索后端",
     version=config.APP_VERSION,
     lifespan=lifespan

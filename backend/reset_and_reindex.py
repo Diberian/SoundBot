@@ -235,7 +235,7 @@ def verify_index():
 def main():
     """主函数"""
     print("=" * 50)
-    print("SoundMind 缓存重置与重新索引工具")
+    print("SoundBot 缓存重置与重新索引工具")
     print("=" * 50)
     
     # 确认操作

@@ -1,5 +1,5 @@
 """
-SoundMind 后端配置管理
+SoundBot 后端配置管理
 
 集中管理所有配置：模型路径、API 密钥、参数等。
 """
@@ -13,7 +13,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).parent
 
 # 应用信息
-APP_NAME = "SoundMind"
+APP_NAME = "SoundBot"
 APP_VERSION = "0.1.0"
 DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
