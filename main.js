@@ -893,6 +893,8 @@ async function startBackendServer() {
 
       console.log(`[Backend] 后端路径: ${backendPath}`);
       console.log(`[Backend] 模型路径: ${modelsPath}`);
+      console.log(`[Backend] 模型路径存在: ${fs.existsSync(modelsPath)}`);
+      console.log(`[Backend] CLAP模型存在: ${fs.existsSync(path.join(modelsPath, 'clap'))}`);
 
       // 检查后端文件是否存在
       if (!fs.existsSync(mainPy)) {
