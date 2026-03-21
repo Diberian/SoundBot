@@ -1,0 +1,37 @@
+{
+    "llm": {
+        "provider": "lm_studio",
+        "lm_studio": {
+            "base_url": "http://localhost:1234/v1",
+            "model": ""
+        },
+        "ollama": {
+            "base_url": "http://localhost:11434/v1",
+            "model": ""
+        },
+        "external": {
+            "base_url": "https://api.openai.com/v1",
+            "api_key": "",
+            "model": "gpt-4o-mini"
+        }
+    },
+    "embedding": {
+        "provider": "default",
+        "default": {
+            "model_name": "laion/larger_clap_general",
+            "dimension": 512,
+            "description": "CLAP 音频-文本嵌入模型（默认）"
+        },
+        "local": {
+            "type": "lm_studio",
+            "base_url": "http://localhost:1234/v1",
+            "model": ""
+        },
+        "external": {
+            "base_url": "https://api.openai.com/v1",
+            "api_key": "",
+            "model": "text-embedding-3-small",
+            "dimension": 1536
+        }
+    }
+}

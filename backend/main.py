@@ -2739,6 +2739,204 @@ async def update_folder_mapping(project_id: str, folder_path: str, user_folder_i
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==================== AI Chat API ====================
+
+@app.post("/api/v1/ai/chat")
+async def ai_chat(request: schemas.AIChatRequest):
+    """
+    AI 对话 - 自然语言搜索
+    
+    支持流式响应，前端需要使用 EventSource 接收。
+    
+    请求格式：
+    - **message**: 用户消息
+    - **history**: 对话历史（可选）
+    - **top_k**: 返回结果数量（默认 20）
+    - **threshold**: 相似度阈值（默认 0.1）
+    
+    SSE 流式响应：
+    - thinking: 正在分析
+    - analyzing: 分析完成
+    - searching: 正在搜索
+    - results: 搜索结果
+    - error: 错误
+    - done: 完成
+    """
+    try:
+        from core.ai_chat_service import get_ai_chat_service, stream_to_sse
+        
+        chat_service = get_ai_chat_service()
+        
+        return StreamingResponse(
+            stream_to_sse(chat_service.chat(
+                message=request.message,
+                conversation_history=request.history,
+                top_k=request.top_k,
+                threshold=request.threshold
+            )),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"
+            }
+        )
+    except Exception as e:
+        logger.error(f"AI Chat 请求失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/ai/config")
+async def get_ai_config():
+    """
+    获取 AI 配置
+    
+    返回当前 LLM 和 Embedding 的配置
+    """
+    try:
+        from core.llm_config_manager import get_llm_config_manager
+        
+        config_manager = get_llm_config_manager()
+        
+        return {
+            "success": True,
+            "llm": {
+                "provider": config_manager.get_llm_provider(),
+                "config": config_manager.get_llm_config(),
+                "available_services": config_manager.detect_available_local_services()
+            },
+            "embedding": {
+                "provider": config_manager.get_embedding_provider(),
+                "config": config_manager.get_embedding_config()
+            }
+        }
+    except Exception as e:
+        logger.error(f"获取 AI 配置失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/ai/config")
+async def save_ai_config(request: schemas.AIConfigRequest):
+    """
+    保存 AI 配置
+    
+    - **llm_provider**: LLM 提供者 (lm_studio/ollama/external)
+    - **llm_config**: LLM 提供者配置
+    - **embedding_provider**: Embedding 提供者 (default/local/external)
+    - **embedding_config**: Embedding 提供者配置
+    """
+    try:
+        from core.llm_config_manager import get_llm_config_manager
+        from core.llm_client import reset_llm_client
+        
+        config_manager = get_llm_config_manager()
+        
+        config_manager.save_full_config(
+            llm_provider=request.llm_provider,
+            llm_config=request.llm_config,
+            embedding_provider=request.embedding_provider,
+            embedding_config=request.embedding_config
+        )
+        
+        # 重置 LLM 客户端以应用新配置
+        reset_llm_client()
+        
+        return {
+            "success": True,
+            "message": "配置已保存"
+        }
+    except Exception as e:
+        logger.error(f"保存 AI 配置失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/ai/config/test")
+async def test_ai_config(request: schemas.AIConfigRequest):
+    """
+    测试 AI 配置连接
+    
+    - **llm_provider**: LLM 提供者
+    - **llm_config**: LLM 提供者配置
+    - **embedding_provider**: Embedding 提供者
+    - **embedding_config**: Embedding 提供者配置
+    """
+    try:
+        from core.llm_config_manager import get_llm_config_manager
+        
+        config_manager = get_llm_config_manager()
+        
+        # 测试 LLM 连接
+        llm_result = await config_manager.test_llm_connection(
+            provider=request.llm_provider,
+            provider_config=request.llm_config
+        )
+        
+        # 测试 Embedding 连接
+        embedding_result = await config_manager.test_embedding_connection(
+            provider=request.embedding_provider,
+            provider_config=request.embedding_config
+        )
+        
+        return {
+            "success": llm_result.get("success", False) and embedding_result.get("success", False),
+            "llm": llm_result,
+            "embedding": embedding_result
+        }
+    except Exception as e:
+        logger.error(f"测试 AI 配置失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/ai/status")
+async def get_ai_status():
+    """
+    获取 AI 服务状态
+    
+    返回 LLM 和 Embedding 的可用状态
+    """
+    try:
+        from core.llm_config_manager import get_llm_config_manager
+        from core.llm_client import get_llm_client
+        from core.embedder import is_embedder_available
+        
+        config_manager = get_llm_config_manager()
+        
+        # 检查 LLM 可用性
+        llm_available = False
+        llm_provider = config_manager.get_llm_provider()
+        available_services = config_manager.detect_available_local_services()
+        
+        if llm_provider == "lm_studio":
+            llm_available = available_services.get("lm_studio", False)
+        elif llm_provider == "ollama":
+            llm_available = available_services.get("ollama", False)
+        else:
+            # 外部 API，尝试连接
+            try:
+                llm_client = get_llm_client()
+                llm_available = llm_client.is_available
+            except:
+                llm_available = False
+        
+        # 检查 Embedding 可用性
+        embedding_available = is_embedder_available()
+        
+        return {
+            "success": True,
+            "llm": {
+                "available": llm_available,
+                "provider": llm_provider
+            },
+            "embedding": {
+                "available": embedding_available,
+                "provider": config_manager.get_embedding_provider()
+            }
+        }
+    except Exception as e:
+        logger.error(f"获取 AI 状态失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ==================== 主入口 ====================
 
 if __name__ == "__main__":

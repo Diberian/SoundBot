@@ -1,201 +1,368 @@
 # -*- coding: utf-8 -*-
 """
-大语言模型客户端
+统一的大语言模型客户端
 
-支持 OpenAI API 和本地 Ollama 模型。
-提供统一的 chat() 接口。
+支持 OpenAI 兼容格式的 API 调用：
+- LM Studio
+- Ollama
+- 通用 OpenAI 兼容 API
+
+提供流式和非流式两种接口。
 """
 
 import json
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, AsyncGenerator
 import requests
+import asyncio
 
-import config
 from utils.logger import get_logger
+from core.llm_config_manager import get_llm_config_manager, LLMProvider
 
 logger = get_logger(__name__)
 
 
 class LLMClient:
-    """大语言模型客户端"""
+    """统一的大语言模型客户端"""
     
-    def __init__(self):
-        self.provider = config.LLM_PROVIDER
-        self.api_key = config.LLM_API_KEY
-        self.model = config.LLM_MODEL
-        self.base_url = config.LLM_BASE_URL
-        self.local_url = config.LOCAL_LLM_URL
-        self.local_model = config.LOCAL_LLM_MODEL
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
+        """
+        初始化 LLM 客户端
         
-    def chat(
-        self, 
-        message: str, 
+        Args:
+            config: LLM 配置（可选，默认从配置管理器读取）
+        """
+        self._config_manager = get_llm_config_manager()
+        
+        if config:
+            self._config = config
+        else:
+            self._load_config()
+    
+    def _load_config(self):
+        """从配置管理器加载配置"""
+        llm_config = self._config_manager.get_llm_config()
+        provider = llm_config.get("provider", "lm_studio")
+        
+        if provider == LLMProvider.LM_STUDIO:
+            cfg = llm_config.get("lm_studio", {})
+            self.provider = LLMProvider.LM_STUDIO
+            self.base_url = cfg.get("base_url", "http://localhost:1234/v1")
+            self.model = cfg.get("model", "")
+            self.api_key = ""
+        elif provider == LLMProvider.OLLAMA:
+            cfg = llm_config.get("ollama", {})
+            self.provider = LLMProvider.OLLAMA
+            self.base_url = cfg.get("base_url", "http://localhost:11434/v1")
+            self.model = cfg.get("model", "")
+            self.api_key = ""
+        else:  # external
+            cfg = llm_config.get("external", {})
+            self.provider = LLMProvider.EXTERNAL
+            self.base_url = cfg.get("base_url", "https://api.openai.com/v1")
+            self.model = cfg.get("model", "gpt-4o-mini")
+            self.api_key = cfg.get("api_key", "")
+    
+    def reload_config(self):
+        """重新加载配置"""
+        self._load_config()
+    
+    @property
+    def is_available(self) -> bool:
+        """检查 LLM 服务是否可用"""
+        try:
+            # 尝试获取模型列表
+            headers = {}
+            if self.api_key:
+                headers["Authorization"] = f"Bearer {self.api_key}"
+            
+            url = self.base_url.rstrip("/") + "/models"
+            response = requests.get(url, headers=headers, timeout=5)
+            return response.status_code == 200
+        except:
+            return False
+    
+    async def chat(
+        self,
+        messages: List[Dict[str, str]],
         system_prompt: Optional[str] = None,
         temperature: float = 0.7,
-        max_tokens: int = 2048
-    ) -> str:
+        max_tokens: int = 2048,
+        stream: bool = True
+    ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         发送聊天请求
+        
+        Args:
+            messages: 消息列表 [{"role": "user", "content": "..."}]
+            system_prompt: 系统提示词（可选，会添加到 messages）
+            temperature: 温度参数（0-1）
+            max_tokens: 最大 tokens
+            stream: 是否流式返回
+            
+        Yields:
+            Dict 类型的消息片段，包含:
+            - type: "content" | "error" | "done"
+            - content: 文本内容（type=content 时）
+            - full_content: 完整内容（type=done 时）
+        """
+        # 构建完整的消息列表
+        full_messages = []
+        
+        if system_prompt:
+            full_messages.append({"role": "system", "content": system_prompt})
+        
+        full_messages.extend(messages)
+        
+        try:
+            if stream:
+                async for chunk in self._chat_stream(
+                    messages=full_messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens
+                ):
+                    yield chunk
+            else:
+                content = await self._chat_non_stream(
+                    messages=full_messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens
+                )
+                yield {"type": "content", "content": content}
+                yield {"type": "done", "full_content": content}
+                
+        except Exception as e:
+            logger.error(f"LLM 调用失败: {e}")
+            yield {"type": "error", "content": f"LLM 调用失败: {str(e)}"}
+    
+    async def _chat_stream(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float,
+        max_tokens: int
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """流式调用"""
+        headers = {
+            "Content-Type": "application/json"
+        }
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": True
+        }
+        
+        # 构建请求 URL
+        url = self.base_url.rstrip("/") + "/chat/completions"
+        
+        full_content = ""
+        
+        try:
+            # 使用 requests 的流式模式
+            response = requests.post(
+                url,
+                headers=headers,
+                json=payload,
+                stream=True,
+                timeout=120
+            )
+            response.raise_for_status()
+            
+            for line in response.iter_lines():
+                if not line:
+                    continue
+                
+                line = line.decode('utf-8')
+                
+                # SSE 格式: data: {...}
+                if line.startswith("data: "):
+                    data_str = line[6:]  # 去掉 "data: " 前缀
+                    
+                    if data_str == "[DONE]":
+                        break
+                    
+                    try:
+                        data = json.loads(data_str)
+                        
+                        # OpenAI 格式
+                        if "choices" in data:
+                            delta = data["choices"][0].get("delta", {})
+                            content = delta.get("content", "")
+                            
+                            if content:
+                                full_content += content
+                                yield {"type": "content", "content": content}
+                        
+                        # Ollama 格式
+                        elif "message" in data:
+                            content = data["message"].get("content", "")
+                            if content:
+                                full_content += content
+                                yield {"type": "content", "content": content}
+                                
+                    except json.JSONDecodeError:
+                        continue
+            
+            yield {"type": "done", "full_content": full_content}
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"LLM 流式请求失败: {e}")
+            raise RuntimeError(f"LLM 请求失败: {str(e)}")
+    
+    async def _chat_non_stream(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float,
+        max_tokens: int
+    ) -> str:
+        """非流式调用"""
+        headers = {
+            "Content-Type": "application/json"
+        }
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": False
+        }
+        
+        url = self.base_url.rstrip("/") + "/chat/completions"
+        
+        try:
+            response = requests.post(
+                url,
+                headers=headers,
+                json=payload,
+                timeout=120
+            )
+            response.raise_for_status()
+            
+            data = response.json()
+            
+            # OpenAI 格式
+            if "choices" in data:
+                return data["choices"][0]["message"]["content"]
+            
+            # Ollama 格式
+            elif "message" in data:
+                return data["message"]["content"]
+            
+            else:
+                raise RuntimeError(f"未知的响应格式: {data}")
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"LLM 请求失败: {e}")
+            raise RuntimeError(f"LLM 请求失败: {str(e)}")
+    
+    async def embeddings(self, texts: List[str]) -> List[List[float]]:
+        """
+        获取文本嵌入向量
+        
+        注意：需要 Embedding 提供者支持 OpenAI 兼容的 /embeddings 端点
+        
+        Args:
+            texts: 文本列表
+            
+        Returns:
+            嵌入向量列表
+        """
+        from core.llm_config_manager import get_llm_config_manager, EmbeddingProvider
+        
+        config_manager = get_llm_config_manager()
+        emb_config = config_manager.get_embedding_config()
+        provider = emb_config.get("provider", "default")
+        
+        # 默认使用 CLAP 模型
+        if provider == EmbeddingProvider.DEFAULT:
+            raise NotImplementedError(
+                "默认 Embedding 使用 CLAP 模型，请通过 search_engine 获取"
+            )
+        
+        # 使用外部或本地 Embedding API
+        if provider == EmbeddingProvider.EXTERNAL:
+            cfg = emb_config.get("external", {})
+        elif provider == EmbeddingProvider.LOCAL:
+            cfg = emb_config.get("local", {})
+        else:
+            raise RuntimeError(f"不支持的 Embedding 提供者: {provider}")
+        
+        base_url = cfg.get("base_url", "")
+        api_key = cfg.get("api_key", "")
+        model = cfg.get("model", "")
+        
+        if not base_url:
+            raise ValueError("Embedding API 地址未配置")
+        
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        
+        payload = {
+            "model": model,
+            "input": texts
+        }
+        
+        url = base_url.rstrip("/") + "/embeddings"
+        
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=30)
+            response.raise_for_status()
+            
+            data = response.json()
+            
+            if "data" in data:
+                # OpenAI 格式
+                embeddings = [item["embedding"] for item in data["data"]]
+                return embeddings
+            else:
+                raise RuntimeError(f"未知的 Embedding 响应格式: {data}")
+                
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Embedding 请求失败: {e}")
+            raise RuntimeError(f"Embedding 请求失败: {str(e)}")
+    
+    async def chat_simple(
+        self,
+        message: str,
+        system_prompt: Optional[str] = None,
+        temperature: float = 0.7,
+        stream: bool = True
+    ) -> AsyncGenerator[str, None]:
+        """
+        简化的聊天接口（只返回文本片段）
         
         Args:
             message: 用户消息
             system_prompt: 系统提示词
             temperature: 温度参数
-            max_tokens: 最大 tokens
+            stream: 是否流式
             
-        Returns:
-            模型回复
+        Yields:
+            文本片段
         """
-        if self.provider == "openai":
-            return self._chat_openai(message, system_prompt, temperature, max_tokens)
-        elif self.provider == "anthropic":
-            return self._chat_anthropic(message, system_prompt, temperature, max_tokens)
-        elif self.provider == "local":
-            return self._chat_local(message, system_prompt, temperature, max_tokens)
-        else:
-            raise ValueError(f"不支持的 LLM 提供商: {self.provider}")
-    
-    def _chat_openai(
-        self,
-        message: str,
-        system_prompt: Optional[str],
-        temperature: float,
-        max_tokens: int
-    ) -> str:
-        """OpenAI API 调用"""
-        if not self.api_key:
-            raise ValueError("OPENAI_API_KEY 未设置")
-        
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
-        
-        base_url = self.base_url or "https://api.openai.com/v1"
-        
-        messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": message})
-        
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens
-        }
-        
-        try:
-            response = requests.post(
-                f"{base_url}/chat/completions",
-                headers=headers,
-                json=payload,
-                timeout=120
-            )
-            response.raise_for_status()
-            result = response.json()
-            return result["choices"][0]["message"]["content"]
-        except requests.exceptions.RequestException as e:
-            logger.error(f"OpenAI API 调用失败: {e}")
-            raise RuntimeError(f"OpenAI API 调用失败: {e}")
-    
-    def _chat_anthropic(
-        self,
-        message: str,
-        system_prompt: Optional[str],
-        temperature: float,
-        max_tokens: int
-    ) -> str:
-        """Anthropic API 调用"""
-        if not self.api_key:
-            raise ValueError("ANTHROPIC_API_KEY 未设置")
-        
-        headers = {
-            "x-api-key": self.api_key,
-            "Content-Type": "application/json",
-            "anthropic-version": "2023-06-01"
-        }
-        
-        base_url = self.base_url or "https://api.anthropic.com/v1"
-        
         messages = [{"role": "user", "content": message}]
         
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens
-        }
-        
-        if system_prompt:
-            payload["system"] = system_prompt
-        
-        try:
-            response = requests.post(
-                f"{base_url}/messages",
-                headers=headers,
-                json=payload,
-                timeout=120
-            )
-            response.raise_for_status()
-            result = response.json()
-            return result["content"][0]["text"]
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Anthropic API 调用失败: {e}")
-            raise RuntimeError(f"Anthropic API 调用失败: {e}")
-    
-    def _chat_local(
-        self,
-        message: str,
-        system_prompt: Optional[str],
-        temperature: float,
-        max_tokens: int
-    ) -> str:
-        """本地 Ollama 模型调用"""
-        payload = {
-            "model": self.local_model,
-            "prompt": message,
-            "temperature": temperature,
-            "stream": False
-        }
-        
-        if system_prompt:
-            payload["system"] = system_prompt
-        
-        try:
-            response = requests.post(
-                self.local_url,
-                json=payload,
-                timeout=300
-            )
-            response.raise_for_status()
-            result = response.json()
-            return result.get("response", "")
-        except requests.exceptions.RequestException as e:
-            logger.error(f"本地模型调用失败: {e}")
-            raise RuntimeError(f"本地模型调用失败: {e}")
-    
-    def is_available(self) -> bool:
-        """
-        检查 LLM 服务是否可用
-        
-        Returns:
-            是否可用
-        """
-        if self.provider == "local":
-            try:
-                response = requests.get(
-                    self.local_url.replace("/api/generate", "/api/tags"),
-                    timeout=5
-                )
-                return response.status_code == 200
-            except:
-                return False
-        else:
-            return bool(self.api_key)
+        async for chunk in self.chat(
+            messages=messages,
+            system_prompt=system_prompt,
+            temperature=temperature,
+            stream=stream
+        ):
+            if chunk["type"] == "content":
+                yield chunk["content"]
+            elif chunk["type"] == "error":
+                raise RuntimeError(chunk["content"])
 
 
-# 全局单例
+# ==================== 全局单例 ====================
+
 _llm_client: Optional[LLMClient] = None
 
 
@@ -205,3 +372,10 @@ def get_llm_client() -> LLMClient:
     if _llm_client is None:
         _llm_client = LLMClient()
     return _llm_client
+
+
+def reset_llm_client():
+    """重置 LLM 客户端（用于配置更新后）"""
+    global _llm_client
+    if _llm_client is not None:
+        _llm_client.reload_config()

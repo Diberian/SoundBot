@@ -201,3 +201,28 @@ class PlaybackResponse(BaseModel):
     duration: float = Field(..., description="音频总时长（秒）")
     is_playing: bool = Field(..., description="是否正在播放")
     message: Optional[str] = Field(None, description="消息")
+
+
+# ==================== AI Chat 请求模型 ====================
+
+class AIChatRequest(BaseModel):
+    """AI 对话请求"""
+    message: str = Field(..., description="用户消息")
+    history: Optional[List[Dict[str, str]]] = Field(default=[], description="对话历史")
+    top_k: int = Field(default=20, ge=1, le=100, description="返回结果数量")
+    threshold: float = Field(default=0.1, ge=0.0, le=1.0, description="相似度阈值")
+
+
+class AIConfigRequest(BaseModel):
+    """AI 配置请求"""
+    llm_provider: str = Field(..., description="LLM 提供者: lm_studio/ollama/external")
+    llm_config: Dict[str, Any] = Field(default={}, description="LLM 提供者配置")
+    embedding_provider: str = Field(..., description="Embedding 提供者: default/local/external")
+    embedding_config: Dict[str, Any] = Field(default={}, description="Embedding 提供者配置")
+
+
+class AIConfigResponse(BaseModel):
+    """AI 配置响应"""
+    success: bool = Field(..., description="是否成功")
+    llm: Dict[str, Any] = Field(..., description="LLM 配置")
+    embedding: Dict[str, Any] = Field(..., description="Embedding 配置")

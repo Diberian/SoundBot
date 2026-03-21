@@ -1,0 +1,517 @@
+# -*- coding: utf-8 -*-
+"""
+LLM 和 Embedding 配置管理器
+
+集中管理 LLM 模型和 Embedding 模型的配置，支持：
+- 本地模型：LM Studio、Ollama
+- 外部 API：OpenAI 兼容格式
+- 默认配置：CLAP 模型（写死）
+"""
+
+import json
+import os
+from pathlib import Path
+from typing import Optional, Dict, Any, List
+from dataclasses import dataclass, asdict
+import requests
+
+import config
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
+
+
+# ==================== 常量定义 ====================
+
+# LLM 提供者类型
+class LLMProvider:
+    LM_STUDIO = "lm_studio"
+    OLLAMA = "ollama"
+    EXTERNAL = "external"
+    
+    ALL = [LM_STUDIO, OLLAMA, EXTERNAL]
+
+
+# Embedding 提供者类型
+class EmbeddingProvider:
+    DEFAULT = "default"  # CLAP 模型（默认，写死）
+    LOCAL = "local"      # 本地 Embedding
+    EXTERNAL = "external"  # 外部 API
+    
+    ALL = [DEFAULT, LOCAL, EXTERNAL]
+
+
+# 默认配置
+DEFAULT_CONFIG = {
+    "llm": {
+        "provider": "lm_studio",
+        "lm_studio": {
+            "base_url": "http://localhost:1234/v1",
+            "model": ""
+        },
+        "ollama": {
+            "base_url": "http://localhost:11434/v1",
+            "model": ""
+        },
+        "external": {
+            "base_url": "https://api.openai.com/v1",
+            "api_key": "",
+            "model": "gpt-4o-mini"
+        }
+    },
+    "embedding": {
+        "provider": "default",
+        "default": {
+            "model_name": "laion/larger_clap_general",
+            "dimension": 512,
+            "description": "CLAP 音频-文本嵌入模型（默认）"
+        },
+        "local": {
+            "type": "lm_studio",
+            "base_url": "http://localhost:1234/v1",
+            "model": ""
+        },
+        "external": {
+            "base_url": "https://api.openai.com/v1",
+            "api_key": "",
+            "model": "text-embedding-3-small",
+            "dimension": 1536
+        }
+    }
+}
+
+
+@dataclass
+class LLMConfig:
+    """LLM 配置数据类"""
+    provider: str
+    base_url: str
+    model: str
+    api_key: str = ""
+    
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+@dataclass
+class EmbeddingConfig:
+    """Embedding 配置数据类"""
+    provider: str
+    model_name: str
+    dimension: int
+    base_url: str = ""
+    api_key: str = ""
+    local_type: str = ""  # lm_studio 或 ollama
+    
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+# ==================== 配置管理器 ====================
+
+class LLMConfigManager:
+    """LLM 和 Embedding 配置管理器（单例）"""
+    
+    _instance: Optional['LLMConfigManager'] = None
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+    
+    def __init__(self):
+        if self._initialized:
+            return
+        
+        self._initialized = True
+        self._config_dir = Path(__file__).parent.parent.parent / "config"
+        self._config_path = self._config_dir / "ai_config.json"
+        
+        # 确保配置目录存在
+        self._config_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 加载配置
+        self._config = self._load_config()
+        
+        logger.info(f"LLMConfigManager 初始化完成，配置文件: {self._config_path}")
+    
+    def _load_config(self) -> dict:
+        """加载配置文件"""
+        if self._config_path.exists():
+            try:
+                with open(self._config_path, 'r', encoding='utf-8') as f:
+                    loaded = json.load(f)
+                    # 合并默认配置，确保所有字段都存在
+                    return self._merge_config(DEFAULT_CONFIG, loaded)
+            except Exception as e:
+                logger.warning(f"加载配置文件失败: {e}，使用默认配置")
+        
+        # 创建默认配置文件
+        self._save_config(DEFAULT_CONFIG)
+        return DEFAULT_CONFIG.copy()
+    
+    def _merge_config(self, default: dict, loaded: dict) -> dict:
+        """深度合并配置"""
+        result = default.copy()
+        for key, value in loaded.items():
+            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                result[key] = self._merge_config(result[key], value)
+            else:
+                result[key] = value
+        return result
+    
+    def _save_config(self, config_data: dict):
+        """保存配置到文件"""
+        try:
+            with open(self._config_path, 'w', encoding='utf-8') as f:
+                json.dump(config_data, f, ensure_ascii=False, indent=4)
+            logger.info("AI 配置已保存")
+        except Exception as e:
+            logger.error(f"保存配置文件失败: {e}")
+            raise
+    
+    # ==================== 配置访问方法 ====================
+    
+    def get_llm_config(self) -> dict:
+        """获取完整的 LLM 配置"""
+        return self._config.get("llm", DEFAULT_CONFIG["llm"]).copy()
+    
+    def get_embedding_config(self) -> dict:
+        """获取完整的 Embedding 配置"""
+        return self._config.get("embedding", DEFAULT_CONFIG["embedding"]).copy()
+    
+    def get_llm_provider(self) -> str:
+        """获取当前 LLM 提供者"""
+        return self._config.get("llm", {}).get("provider", "lm_studio")
+    
+    def get_embedding_provider(self) -> str:
+        """获取当前 Embedding 提供者"""
+        return self._config.get("embedding", {}).get("provider", "default")
+    
+    def get_current_llm_config(self) -> LLMConfig:
+        """获取当前 LLM 配置（解析后的）"""
+        llm_config = self.get_llm_config()
+        provider = llm_config.get("provider", "lm_studio")
+        
+        if provider == LLMProvider.LM_STUDIO:
+            cfg = llm_config.get("lm_studio", {})
+            return LLMConfig(
+                provider=provider,
+                base_url=cfg.get("base_url", "http://localhost:1234/v1"),
+                model=cfg.get("model", ""),
+                api_key=""
+            )
+        elif provider == LLMProvider.OLLAMA:
+            cfg = llm_config.get("ollama", {})
+            return LLMConfig(
+                provider=provider,
+                base_url=cfg.get("base_url", "http://localhost:11434/v1"),
+                model=cfg.get("model", ""),
+                api_key=""
+            )
+        else:  # external
+            cfg = llm_config.get("external", {})
+            return LLMConfig(
+                provider=provider,
+                base_url=cfg.get("base_url", "https://api.openai.com/v1"),
+                model=cfg.get("model", "gpt-4o-mini"),
+                api_key=cfg.get("api_key", "")
+            )
+    
+    def get_current_embedding_config(self) -> EmbeddingConfig:
+        """获取当前 Embedding 配置（解析后的）"""
+        emb_config = self.get_embedding_config()
+        provider = emb_config.get("provider", "default")
+        
+        if provider == EmbeddingProvider.DEFAULT:
+            cfg = emb_config.get("default", {})
+            return EmbeddingConfig(
+                provider=provider,
+                model_name=cfg.get("model_name", "laion/larger_clap_general"),
+                dimension=cfg.get("dimension", 512)
+            )
+        elif provider == EmbeddingProvider.LOCAL:
+            cfg = emb_config.get("local", {})
+            return EmbeddingConfig(
+                provider=provider,
+                model_name=cfg.get("model", ""),
+                dimension=1536,  # 默认值
+                base_url=cfg.get("base_url", "http://localhost:1234/v1"),
+                local_type=cfg.get("type", "lm_studio")
+            )
+        else:  # external
+            cfg = emb_config.get("external", {})
+            return EmbeddingConfig(
+                provider=provider,
+                model_name=cfg.get("model", "text-embedding-3-small"),
+                dimension=cfg.get("dimension", 1536),
+                base_url=cfg.get("base_url", "https://api.openai.com/v1"),
+                api_key=cfg.get("api_key", "")
+            )
+    
+    # ==================== 配置更新方法 ====================
+    
+    def update_llm_config(self, provider: str, provider_config: dict):
+        """更新 LLM 配置"""
+        self._config["llm"]["provider"] = provider
+        
+        if provider == LLMProvider.LM_STUDIO:
+            self._config["llm"]["lm_studio"].update(provider_config)
+        elif provider == LLMProvider.OLLAMA:
+            self._config["llm"]["ollama"].update(provider_config)
+        else:  # external
+            self._config["llm"]["external"].update(provider_config)
+        
+        self._save_config(self._config)
+    
+    def update_embedding_config(self, provider: str, provider_config: dict):
+        """更新 Embedding 配置"""
+        self._config["embedding"]["provider"] = provider
+        
+        if provider == EmbeddingProvider.DEFAULT:
+            # 默认配置不需要额外参数
+            pass
+        elif provider == EmbeddingProvider.LOCAL:
+            self._config["embedding"]["local"].update(provider_config)
+        else:  # external
+            self._config["embedding"]["external"].update(provider_config)
+        
+        self._save_config(self._config)
+    
+    def save_full_config(self, llm_provider: str, llm_config: dict, 
+                          embedding_provider: str, embedding_config: dict):
+        """保存完整配置"""
+        self._config["llm"]["provider"] = llm_provider
+        self._config["llm"][llm_provider] = llm_config
+        
+        self._config["embedding"]["provider"] = embedding_provider
+        self._config["embedding"][embedding_provider] = embedding_config
+        
+        self._save_config(self._config)
+    
+    # ==================== 连接测试 ====================
+    
+    async def test_llm_connection(self, provider: str = None, 
+                                   provider_config: dict = None) -> dict:
+        """
+        测试 LLM 连接
+        
+        Args:
+            provider: 提供者类型（可选，使用当前配置）
+            provider_config: 提供者配置（可选，使用当前配置）
+            
+        Returns:
+            {"success": bool, "message": str, "models": List[str]}
+        """
+        if provider is None:
+            provider = self.get_llm_provider()
+        
+        if provider_config is None:
+            llm_config = self.get_llm_config()
+            provider_config = llm_config.get(provider, {})
+        
+        base_url = provider_config.get("base_url", "")
+        api_key = provider_config.get("api_key", "")
+        model = provider_config.get("model", "")
+        
+        if not base_url:
+            return {"success": False, "message": "API 地址不能为空", "models": []}
+        
+        try:
+            # 尝试获取模型列表
+            headers = {"Content-Type": "application/json"}
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+            
+            # LM Studio 和 Ollama 都支持 /models 端点
+            models_url = base_url.rstrip("/") + "/models"
+            
+            response = requests.get(models_url, headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                models = []
+                
+                # 解析不同格式
+                if "data" in data:  # OpenAI 格式
+                    models = [m.get("id", "") for m in data.get("data", [])]
+                elif "models" in data:  # Ollama 格式
+                    models = [m.get("name", "") for m in data.get("models", [])]
+                elif isinstance(data, list):  # 数组格式
+                    models = [m.get("id") or m.get("name") or str(m) for m in data]
+                
+                return {
+                    "success": True,
+                    "message": f"连接成功，找到 {len(models)} 个模型",
+                    "models": models
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": f"连接失败: HTTP {response.status_code}",
+                    "models": []
+                }
+                
+        except requests.exceptions.ConnectionError:
+            return {
+                "success": False,
+                "message": f"无法连接到 {base_url}，请确保服务已启动",
+                "models": []
+            }
+        except requests.exceptions.Timeout:
+            return {
+                "success": False,
+                "message": "连接超时",
+                "models": []
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"测试失败: {str(e)}",
+                "models": []
+            }
+    
+    async def test_embedding_connection(self, provider: str = None,
+                                         provider_config: dict = None) -> dict:
+        """
+        测试 Embedding 连接
+        
+        Args:
+            provider: 提供者类型（可选，使用当前配置）
+            provider_config: 提供者配置（可选，使用当前配置）
+            
+        Returns:
+            {"success": bool, "message": str}
+        """
+        if provider is None:
+            provider = self.get_embedding_provider()
+        
+        # 默认配置（CLAP）总是可用的
+        if provider == EmbeddingProvider.DEFAULT:
+            return {
+                "success": True,
+                "message": "使用默认 CLAP 模型（本地）"
+            }
+        
+        if provider_config is None:
+            emb_config = self.get_embedding_config()
+            provider_config = emb_config.get(provider, {})
+        
+        base_url = provider_config.get("base_url", "")
+        api_key = provider_config.get("api_key", "")
+        
+        if not base_url:
+            return {"success": False, "message": "API 地址不能为空"}
+        
+        try:
+            headers = {
+                "Content-Type": "application/json"
+            }
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+            
+            # 测试 embedding 请求
+            payload = {
+                "input": "test",
+                "model": provider_config.get("model", "")
+            }
+            
+            embeddings_url = base_url.rstrip("/") + "/embeddings"
+            response = requests.post(embeddings_url, headers=headers, json=payload, timeout=30)
+            
+            if response.status_code == 200:
+                return {
+                    "success": True,
+                    "message": "Embedding 服务连接成功"
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": f"连接失败: HTTP {response.status_code}"
+                }
+                
+        except requests.exceptions.ConnectionError:
+            return {
+                "success": False,
+                "message": f"无法连接到 {base_url}"
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"测试失败: {str(e)}"
+            }
+    
+    # ==================== 服务检测 ====================
+    
+    def detect_available_local_services(self) -> dict:
+        """检测本地可用的服务"""
+        services = {
+            "lm_studio": False,
+            "ollama": False,
+            "lm_studio_url": "",
+            "ollama_url": ""
+        }
+        
+        # 检测 LM Studio
+        if self._check_port("localhost", 1234):
+            services["lm_studio"] = True
+            services["lm_studio_url"] = "http://localhost:1234/v1"
+        
+        # 检测 Ollama
+        if self._check_port("localhost", 11434):
+            services["ollama"] = True
+            services["ollama_url"] = "http://localhost:11434/v1"
+        
+        return services
+    
+    def _check_port(self, host: str, port: int) -> bool:
+        """检查端口是否开放"""
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(1)
+        try:
+            result = sock.connect_ex((host, port))
+            sock.close()
+            return result == 0
+        except:
+            return False
+    
+    # ==================== 配置导出/导入 ====================
+    
+    def export_config(self) -> dict:
+        """导出当前配置（不含敏感信息）"""
+        config = self._config.copy()
+        
+        # 隐藏 API Key
+        if config.get("llm", {}).get("external", {}).get("api_key"):
+            config["llm"]["external"]["api_key"] = "***"
+        if config.get("embedding", {}).get("external", {}).get("api_key"):
+            config["embedding"]["external"]["api_key"] = "***"
+        
+        return config
+    
+    def reset_to_defaults(self):
+        """重置为默认配置"""
+        self._config = DEFAULT_CONFIG.copy()
+        self._save_config(self._config)
+        logger.info("配置已重置为默认")
+
+
+# ==================== 全局单例 ====================
+
+_config_manager: Optional[LLMConfigManager] = None
+
+
+def get_llm_config_manager() -> LLMConfigManager:
+    """获取 LLM 配置管理器单例"""
+    global _config_manager
+    if _config_manager is None:
+        _config_manager = LLMConfigManager()
+    return _config_manager
+
+
+def reset_llm_config_manager():
+    """重置配置管理器（用于测试或重新加载）"""
+    global _config_manager
+    _config_manager = None

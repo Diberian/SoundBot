@@ -175,23 +175,9 @@
                         <span>清理临时裁切文件</span>
                     </button>
                     <div class="border-t my-2" style="border-color: var(--border-color);"></div>
-                    <div class="px-3 py-2 text-xs font-medium uppercase tracking-wider opacity-50">AI 模型</div>
-                    <button class="w-full px-4 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-between setting-option" data-type="model" data-value="gpt4">
-                        <span>GPT-4</span><i data-lucide="check" class="w-4 h-4 check-icon"></i>
-                    </button>
-                    <button class="w-full px-4 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-between setting-option opacity-50" data-type="model" data-value="claude">
-                        <span>Claude 3</span><i data-lucide="check" class="w-4 h-4 check-icon hidden"></i>
-                    </button>
-                    <button class="w-full px-4 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-between setting-option opacity-50" data-type="model" data-value="gemini">
-                        <span>Gemini Pro</span><i data-lucide="check" class="w-4 h-4 check-icon hidden"></i>
-                    </button>
-                    <div class="border-t my-2" style="border-color: var(--border-color);"></div>
-                    <div class="px-3 py-2 text-xs font-medium uppercase tracking-wider opacity-50">Embedding 模型</div>
-                    <button class="w-full px-4 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-between setting-option" data-type="embedding" data-value="openai">
-                        <span>OpenAI Embedding</span><i data-lucide="check" class="w-4 h-4 check-icon"></i>
-                    </button>
-                    <button class="w-full px-4 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-between setting-option opacity-50" data-type="embedding" data-value="local">
-                        <span>本地模型</span><i data-lucide="check" class="w-4 h-4 check-icon hidden"></i>
+                    <button id="openAISettingsBtn" class="w-full px-4 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-2">
+                        <i data-lucide="bot" class="w-4 h-4"></i>
+                        <span>AI 设置</span>
                     </button>
                     <div class="border-t my-2" style="border-color: var(--border-color);"></div>
                     <button id="themeToggle" class="w-full px-4 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-2">
@@ -306,9 +292,14 @@
         <!-- ==================== RIGHT: AI CHAT ==================== -->
         <aside class="w-80 border-l flex flex-col shrink-0 transition-colors duration-300"
                style="border-color: var(--border-color); background-color: var(--bg-secondary);">
-            <div class="h-10 flex items-center px-4 border-b text-xs font-medium uppercase tracking-wider opacity-70"
+            <div class="h-10 flex items-center justify-between px-4 border-b text-xs font-medium uppercase tracking-wider opacity-70"
                  style="border-color: var(--border-color);">
-                <i data-lucide="bot" class="w-4 h-4 mr-2"></i>AI 助手
+                <div class="flex items-center">
+                    <i data-lucide="bot" class="w-4 h-4 mr-2"></i>AI 助手
+                </div>
+                <button id="openAISettingsBtnChat" class="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors" title="AI 设置">
+                    <i data-lucide="settings" class="w-4 h-4"></i>
+                </button>
             </div>
             <div class="flex-1 overflow-y-auto p-4 space-y-4" id="chatMessages">
                 <div class="chat-message">
@@ -3119,63 +3110,532 @@
             ctx.restore();
         }
 
-        // ==================== CHAT ====================
-        function addChatMessage(text, isUser = false) {
+        // ==================== AI CHAT ====================
+
+        let chatHistory = [];  // 对话历史
+        let isAiResponding = false;  // AI 是否正在响应
+
+        function addChatMessage(html, isUser = false) {
             const container = document.getElementById('chatMessages');
             const messageDiv = document.createElement('div');
-            messageDiv.className = 'chat-message animate-slide-in';
-            
+            messageDiv.className = 'chat-message';
+
             if (isUser) {
+                // 用户消息靠右
                 messageDiv.innerHTML = `
                     <div class="flex items-start gap-2 justify-end">
-                        <div class="rounded-2xl rounded-tr-sm px-4 py-3 text-sm border max-w-[85%]" style="border-color: var(--border-color);">
-                            ${text}
+                        <div class="flex-1 text-right">
+                            <div class="rounded-2xl rounded-tr-sm px-4 py-3 text-sm inline-block" style="background-color: #3b82f6; color: white;">
+                                ${escapeHtml(html)}
+                            </div>
+                        </div>
+                        <div class="w-7 h-7 rounded-full border flex items-center justify-center shrink-0" style="border-color: var(--border-color);">
+                            <i data-lucide="user" class="w-4 h-4"></i>
                         </div>
                     </div>
                 `;
             } else {
+                // AI 消息靠左
                 messageDiv.innerHTML = `
                     <div class="flex items-start gap-2">
                         <div class="w-7 h-7 rounded-full border flex items-center justify-center shrink-0" style="border-color: var(--border-color);">
                             <i data-lucide="bot" class="w-4 h-4"></i>
                         </div>
-                        <div class="rounded-2xl rounded-tl-sm px-4 py-3 text-sm max-w-[85%]" style="background-color: var(--bg-tertiary);">
-                            ${text}
+                        <div class="flex-1">
+                            <div class="rounded-2xl rounded-tl-sm px-4 py-3 text-sm" style="background-color: var(--bg-tertiary);">
+                                ${html}
+                            </div>
                         </div>
                     </div>
                 `;
             }
-            
+
             container.appendChild(messageDiv);
             container.scrollTop = container.scrollHeight;
             lucide.createIcons();
         }
 
-        function handleChatMessage(text) {
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function addLoadingMessage() {
+            const container = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.id = 'aiLoadingMessage';
+            messageDiv.className = 'chat-message';
+            messageDiv.innerHTML = `
+                <div class="flex items-start gap-2">
+                    <div class="w-7 h-7 rounded-full border flex items-center justify-center shrink-0" style="border-color: var(--border-color);">
+                        <i data-lucide="bot" class="w-4 h-4"></i>
+                    </div>
+                    <div class="flex-1">
+                        <div class="rounded-2xl rounded-tl-sm px-4 py-3 text-sm" style="background-color: var(--bg-tertiary);">
+                            <div class="flex items-center gap-2">
+                                <div class="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin" style="border-color: var(--text-secondary); border-top-color: transparent;"></div>
+                                <span id="aiLoadingText">正在思考...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.appendChild(messageDiv);
+            container.scrollTop = container.scrollHeight;
+            lucide.createIcons();
+        }
+
+        function updateLoadingMessage(text) {
+            const loadingText = document.getElementById('aiLoadingText');
+            if (loadingText) {
+                loadingText.textContent = text;
+            }
+        }
+
+        function removeLoadingMessage() {
+            const loadingMessage = document.getElementById('aiLoadingMessage');
+            if (loadingMessage) {
+                loadingMessage.remove();
+            }
+        }
+
+        async function handleChatMessage(text) {
+            if (isAiResponding) return;
+
+            // 添加用户消息
             addChatMessage(text, true);
-            
-            setTimeout(() => {
-                const lowerText = text.toLowerCase();
-                let response = '';
-                
-                if (lowerText.includes('雨') || lowerText.includes('rain')) {
-                    response = '我找到了以下雨声音效：<br>• rain_light_01.wav (00:15)<br>点击播放按钮即可试听。';
-                    setTimeout(() => {
-                        const rainSound = soundData.find(s => s.name.includes('rain'));
-                        if (rainSound) selectSound(rainSound);
-                    }, 500);
-                } else if (lowerText.includes('雷') || lowerText.includes('thunder')) {
-                    response = '我找到了以下雷声音效：<br>• thunder_deep_02.wav (00:08)<br>这是一个深沉的雷声音效。';
-                } else if (lowerText.includes('恐怖') || lowerText.includes('吓人')) {
-                    response = '推荐以下恐怖氛围音效：<br>• wind_howling_storm.wav (00:25)<br>• thunder_deep_02.wav (00:08)<br>组合使用效果更佳。';
-                } else if (lowerText.includes('自然') || lowerText.includes('nature')) {
-                    response = '自然音效库包含：<br>• rain_light_01.wav - 雨声<br>• thunder_deep_02.wav - 雷声<br>• birds_morning_chorus.wav - 鸟鸣<br>• wind_howling_storm.wav - 风声';
-                } else {
-                    response = '我理解你在寻找音效。请告诉我更具体的需求，比如音效类型（雨声、雷声、脚步声等）或使用场景。';
+            chatHistory.push({ role: 'user', content: text });
+
+            // 显示加载状态
+            addLoadingMessage();
+            isAiResponding = true;
+
+            try {
+                const response = await fetch('http://127.0.0.1:8000/api/v1/ai/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: text,
+                        history: chatHistory.slice(-10),  // 只发送最近 10 条
+                        top_k: 20,
+                        threshold: 0.1
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('请求失败');
                 }
-                
-                addChatMessage(response);
-            }, 800);
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let fullContent = '';
+
+                removeLoadingMessage();
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.slice(6);
+                            if (data === '[DONE]' || data === '{"type": "done"}') continue;
+
+                            try {
+                                const event = JSON.parse(data);
+                                await processAiEvent(event);
+                            } catch (e) {
+                                // 忽略解析错误
+                            }
+                        }
+                    }
+                }
+
+                // 添加 AI 回复到历史
+                if (fullContent) {
+                    chatHistory.push({ role: 'assistant', content: fullContent });
+                }
+
+            } catch (error) {
+                console.error('AI Chat 错误:', error);
+                removeLoadingMessage();
+                addChatMessage(`抱歉，发生了错误：${error.message}。请检查 AI 服务是否正常运行。`);
+            } finally {
+                isAiResponding = false;
+            }
+        }
+
+        async function processAiEvent(event) {
+            switch (event.type) {
+                case 'thinking':
+                    updateLoadingMessage(event.content);
+                    break;
+
+                case 'analyzing':
+                    updateLoadingMessage(event.content || '分析中...');
+                    break;
+
+                case 'searching':
+                    updateLoadingMessage(event.content || '搜索中...');
+                    break;
+
+                case 'results':
+                    // 显示摘要
+                    if (event.summary) {
+                        addChatMessage(event.summary);
+                    }
+
+                    // 更新主音效列表
+                    if (event.results && event.results.length > 0) {
+                        displayAiSearchResults(event.results);
+                    } else {
+                        addChatMessage('没有找到匹配的音效。试试其他描述？');
+                    }
+                    break;
+
+                case 'error':
+                    addChatMessage(`错误: ${event.content}`);
+                    break;
+            }
+        }
+
+        function displayAiSearchResults(results) {
+            // 将 AI 搜索结果转换为 soundData 格式并显示
+            const container = document.getElementById('soundList');
+            
+            // 清空现有内容
+            container.innerHTML = '';
+
+            // 更新结果计数
+            const headerText = document.querySelector('main .h-10 .flex-1');
+            if (headerText) {
+                headerText.textContent = `AI 搜索结果 (${results.length})`;
+            }
+
+            results.forEach((result, index) => {
+                const file = result;
+                const soundItem = document.createElement('div');
+                soundItem.className = 'sound-item flex items-center py-2 px-4 border-b cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-colors';
+                soundItem.style.borderColor = 'var(--border-color)';
+                soundItem.dataset.path = file.path;
+                soundItem.dataset.index = index;
+
+                soundItem.innerHTML = `
+                    <div class="w-10 flex justify-center"><input type="checkbox" class="sound-checkbox w-4 h-4 rounded border-gray-300"></div>
+                    <div class="w-12 flex justify-center">
+                        <div class="w-8 h-8 rounded border flex items-center justify-center text-xs" style="border-color: var(--border-color);">
+                            ${index + 1}
+                        </div>
+                    </div>
+                    <div class="w-12 flex justify-center">
+                        <div class="w-8 h-8 rounded border flex items-center justify-center text-xs" style="background-color: var(--bg-tertiary); border-color: var(--border-color);">
+                            <i data-lucide="music" class="w-4 h-4"></i>
+                        </div>
+                    </div>
+                    <div class="flex-1 min-w-0 flex items-center gap-2">
+                        <div class="flex-1 min-w-0">
+                            <div class="text-sm font-medium truncate" style="color: var(--text-primary);">${escapeHtml(file.filename)}</div>
+                            <div class="text-xs truncate opacity-60" style="color: var(--text-secondary);">${escapeHtml(file.path)}</div>
+                        </div>
+                    </div>
+                    <div class="w-24 text-right text-sm font-mono" style="color: var(--text-secondary);">${formatDuration(file.duration)}</div>
+                    <div class="w-16 flex justify-center">
+                        <button class="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 play-btn" title="播放" data-path="${escapeHtml(file.path)}">
+                            <i data-lucide="play" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                `;
+
+                soundItem.addEventListener('click', (e) => {
+                    if (e.target.closest('.play-btn')) {
+                        e.stopPropagation();
+                        const path = e.target.closest('.play-btn').dataset.path;
+                        // 创建简化的 sound 对象并播放
+                        const soundObj = {
+                            path: path,
+                            filename: file.filename,
+                            duration: file.duration,
+                            filePath: path
+                        };
+                        selectSound(soundObj);
+                        // 开始播放
+                        if (audioPlayer && audioPlayer.src) {
+                            audioPlayer.play().catch(e => console.error('播放失败:', e));
+                        }
+                    } else if (e.target.closest('input[type="checkbox"]')) {
+                        // 复选框点击不触发选择
+                    } else {
+                        // 选中音效
+                        const soundObj = {
+                            path: file.path,
+                            filename: file.filename,
+                            duration: file.duration,
+                            filePath: file.path
+                        };
+                        selectSound(soundObj);
+                    }
+                });
+
+                container.appendChild(soundItem);
+            });
+
+            lucide.createIcons();
+
+            // 滚动到列表顶部
+            container.scrollTop = 0;
+
+            // 显示通知
+            showNotification(`AI 搜索完成，找到 ${results.length} 个相关音效`, 'success');
+        }
+
+        function formatDuration(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // ==================== SETTINGS MODAL ====================
+
+        function openSettingsModal() {
+            const modal = document.getElementById('settingsModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            loadAiConfig();
+        }
+
+        function closeSettingsModal() {
+            const modal = document.getElementById('settingsModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        async function loadAiConfig() {
+            try {
+                const response = await fetch('http://127.0.0.1:8000/api/v1/ai/config');
+                const data = await response.json();
+
+                if (data.success) {
+                    // 设置 LLM 配置
+                    const llmProvider = data.llm.provider;
+                    document.querySelectorAll('input[name="llmProvider"]').forEach(radio => {
+                        radio.checked = radio.value === llmProvider;
+                    });
+                    updateLlmConfigDisplay(llmProvider);
+
+                    const llmConfig = data.llm.config[llmProvider] || {};
+                    document.getElementById('lmStudioUrl').value = llmConfig.base_url || 'http://localhost:1234/v1';
+                    document.getElementById('lmStudioModel').value = llmConfig.model || '';
+                    document.getElementById('ollamaUrl').value = llmConfig.base_url || 'http://localhost:11434/v1';
+                    document.getElementById('ollamaModel').value = llmConfig.model || '';
+
+                    // 外部 API
+                    const extConfig = data.llm.config.external || {};
+                    document.getElementById('externalApiUrl').value = extConfig.base_url || '';
+                    document.getElementById('externalApiKey').value = extConfig.api_key || '';
+                    document.getElementById('externalApiModel').value = extConfig.model || '';
+
+                    // 设置 Embedding 配置
+                    const embProvider = data.embedding.provider;
+                    document.querySelectorAll('input[name="embeddingProvider"]').forEach(radio => {
+                        radio.checked = radio.value === embProvider;
+                    });
+                    updateEmbeddingConfigDisplay(embProvider);
+
+                    const embConfig = data.embedding.config[embProvider] || {};
+                    if (embConfig.type) {
+                        document.getElementById('localEmbeddingType').value = embConfig.type;
+                    }
+                    document.getElementById('localEmbeddingUrl').value = embConfig.base_url || 'http://localhost:1234/v1';
+                    document.getElementById('localEmbeddingModel').value = embConfig.model || '';
+
+                    const extEmbConfig = data.embedding.config.external || {};
+                    document.getElementById('externalEmbeddingUrl').value = extEmbConfig.base_url || '';
+                    document.getElementById('externalEmbeddingKey').value = extEmbConfig.api_key || '';
+                    document.getElementById('externalEmbeddingModel').value = extEmbConfig.model || '';
+                }
+            } catch (error) {
+                console.error('加载 AI 配置失败:', error);
+                showNotification('加载 AI 配置失败', 'error');
+            }
+        }
+
+        function updateLlmConfigDisplay(provider) {
+            document.getElementById('lmStudioConfig').classList.add('hidden');
+            document.getElementById('ollamaConfig').classList.add('hidden');
+            document.getElementById('externalApiConfig').classList.add('hidden');
+
+            if (provider === 'lm_studio') {
+                document.getElementById('lmStudioConfig').classList.remove('hidden');
+            } else if (provider === 'ollama') {
+                document.getElementById('ollamaConfig').classList.remove('hidden');
+            } else if (provider === 'external') {
+                document.getElementById('externalApiConfig').classList.remove('hidden');
+            }
+        }
+
+        function updateEmbeddingConfigDisplay(provider) {
+            document.getElementById('localEmbeddingConfig').classList.add('hidden');
+            document.getElementById('externalEmbeddingConfig').classList.add('hidden');
+
+            if (provider === 'local') {
+                document.getElementById('localEmbeddingConfig').classList.remove('hidden');
+            } else if (provider === 'external') {
+                document.getElementById('externalEmbeddingConfig').classList.remove('hidden');
+            }
+        }
+
+        async function testAiConnection() {
+            const testBtn = document.getElementById('testConnectionBtn');
+            testBtn.disabled = true;
+            testBtn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 inline mr-1 animate-spin"></i>测试中...';
+            lucide.createIcons();
+
+            const llmProvider = document.querySelector('input[name="llmProvider"]:checked')?.value || 'lm_studio';
+            const embProvider = document.querySelector('input[name="embeddingProvider"]:checked')?.value || 'default';
+
+            let llmConfig = {};
+            if (llmProvider === 'lm_studio') {
+                llmConfig = {
+                    base_url: document.getElementById('lmStudioUrl').value,
+                    model: document.getElementById('lmStudioModel').value
+                };
+            } else if (llmProvider === 'ollama') {
+                llmConfig = {
+                    base_url: document.getElementById('ollamaUrl').value,
+                    model: document.getElementById('ollamaModel').value
+                };
+            } else {
+                llmConfig = {
+                    base_url: document.getElementById('externalApiUrl').value,
+                    api_key: document.getElementById('externalApiKey').value,
+                    model: document.getElementById('externalApiModel').value
+                };
+            }
+
+            let embConfig = {};
+            if (embProvider === 'local') {
+                embConfig = {
+                    type: document.getElementById('localEmbeddingType').value,
+                    base_url: document.getElementById('localEmbeddingUrl').value,
+                    model: document.getElementById('localEmbeddingModel').value
+                };
+            } else if (embProvider === 'external') {
+                embConfig = {
+                    base_url: document.getElementById('externalEmbeddingUrl').value,
+                    api_key: document.getElementById('externalEmbeddingKey').value,
+                    model: document.getElementById('externalEmbeddingModel').value
+                };
+            }
+
+            try {
+                const response = await fetch('http://127.0.0.1:8000/api/v1/ai/config/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        llm_provider: llmProvider,
+                        llm_config: llmConfig,
+                        embedding_provider: embProvider,
+                        embedding_config: embConfig
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showNotification('连接测试成功！', 'success');
+                } else {
+                    let errorMsg = '连接测试失败';
+                    if (!data.llm?.success) {
+                        errorMsg += `\nLLM: ${data.llm?.message || '未知错误'}`;
+                    }
+                    if (!data.embedding?.success) {
+                        errorMsg += `\nEmbedding: ${data.embedding?.message || '未知错误'}`;
+                    }
+                    showNotification(errorMsg, 'error');
+                }
+            } catch (error) {
+                showNotification('测试请求失败: ' + error.message, 'error');
+            } finally {
+                testBtn.disabled = false;
+                testBtn.innerHTML = '<i data-lucide="wifi" class="w-4 h-4 inline mr-1"></i>测试连接';
+                lucide.createIcons();
+            }
+        }
+
+        async function saveAiConfig() {
+            const saveBtn = document.getElementById('saveSettingsBtn');
+            saveBtn.disabled = true;
+            saveBtn.textContent = '保存中...';
+
+            const llmProvider = document.querySelector('input[name="llmProvider"]:checked')?.value || 'lm_studio';
+            const embProvider = document.querySelector('input[name="embeddingProvider"]:checked')?.value || 'default';
+
+            let llmConfig = {};
+            if (llmProvider === 'lm_studio') {
+                llmConfig = {
+                    base_url: document.getElementById('lmStudioUrl').value,
+                    model: document.getElementById('lmStudioModel').value
+                };
+            } else if (llmProvider === 'ollama') {
+                llmConfig = {
+                    base_url: document.getElementById('ollamaUrl').value,
+                    model: document.getElementById('ollamaModel').value
+                };
+            } else {
+                llmConfig = {
+                    base_url: document.getElementById('externalApiUrl').value,
+                    api_key: document.getElementById('externalApiKey').value,
+                    model: document.getElementById('externalApiModel').value
+                };
+            }
+
+            let embConfig = {};
+            if (embProvider === 'local') {
+                embConfig = {
+                    type: document.getElementById('localEmbeddingType').value,
+                    base_url: document.getElementById('localEmbeddingUrl').value,
+                    model: document.getElementById('localEmbeddingModel').value
+                };
+            } else if (embProvider === 'external') {
+                embConfig = {
+                    base_url: document.getElementById('externalEmbeddingUrl').value,
+                    api_key: document.getElementById('externalEmbeddingKey').value,
+                    model: document.getElementById('externalEmbeddingModel').value
+                };
+            }
+
+            try {
+                const response = await fetch('http://127.0.0.1:8000/api/v1/ai/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        llm_provider: llmProvider,
+                        llm_config: llmConfig,
+                        embedding_provider: embProvider,
+                        embedding_config: embConfig
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showNotification('配置已保存', 'success');
+                    closeSettingsModal();
+                } else {
+                    showNotification('保存失败: ' + (data.error || '未知错误'), 'error');
+                }
+            } catch (error) {
+                showNotification('保存请求失败: ' + error.message, 'error');
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = '保存配置';
+            }
         }
 
         // ==================== SETTINGS ====================
@@ -5278,7 +5738,73 @@
                 document.getElementById('volumeIcon').setAttribute('data-lucide', icon);
                 lucide.createIcons();
             });
-            
+
+            // ==================== SETTINGS MODAL ====================
+            // 打开 AI 设置按钮（导航栏）
+            document.getElementById('openAISettingsBtn')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                // 关闭设置下拉菜单
+                document.getElementById('settingsDropdown').classList.add('hidden');
+                document.getElementById('settingsDropdown').classList.remove('visible');
+                // 打开设置弹窗
+                openSettingsModal();
+            });
+
+            // 打开 AI 设置按钮（Chat 面板）
+            document.getElementById('openAISettingsBtnChat')?.addEventListener('click', () => {
+                openSettingsModal();
+            });
+
+            // 关闭设置弹窗
+            document.getElementById('closeSettingsModal')?.addEventListener('click', closeSettingsModal);
+            document.getElementById('cancelSettingsBtn')?.addEventListener('click', closeSettingsModal);
+
+            // Tab 切换
+            document.getElementById('llmTabBtn')?.addEventListener('click', () => {
+                document.getElementById('llmTabBtn').classList.add('border-blue-500');
+                document.getElementById('llmTabBtn').classList.remove('border-transparent');
+                document.getElementById('embeddingTabBtn').classList.remove('border-blue-500');
+                document.getElementById('embeddingTabBtn').classList.add('border-transparent');
+                document.getElementById('llmConfigContent').classList.remove('hidden');
+                document.getElementById('embeddingConfigContent').classList.add('hidden');
+            });
+
+            document.getElementById('embeddingTabBtn')?.addEventListener('click', () => {
+                document.getElementById('embeddingTabBtn').classList.add('border-blue-500');
+                document.getElementById('embeddingTabBtn').classList.remove('border-transparent');
+                document.getElementById('llmTabBtn').classList.remove('border-blue-500');
+                document.getElementById('llmTabBtn').classList.add('border-transparent');
+                document.getElementById('embeddingConfigContent').classList.remove('hidden');
+                document.getElementById('llmConfigContent').classList.add('hidden');
+            });
+
+            // LLM 提供者切换
+            document.querySelectorAll('input[name="llmProvider"]').forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    updateLlmConfigDisplay(e.target.value);
+                });
+            });
+
+            // Embedding 提供者切换
+            document.querySelectorAll('input[name="embeddingProvider"]').forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    updateEmbeddingConfigDisplay(e.target.value);
+                });
+            });
+
+            // 测试连接按钮
+            document.getElementById('testConnectionBtn')?.addEventListener('click', testAiConnection);
+
+            // 保存配置按钮
+            document.getElementById('saveSettingsBtn')?.addEventListener('click', saveAiConfig);
+
+            // 点击遮罩关闭
+            document.getElementById('settingsModal')?.addEventListener('click', (e) => {
+                if (e.target.id === 'settingsModal') {
+                    closeSettingsModal();
+                }
+            });
+
             // Chat
             document.getElementById('sendMessage').addEventListener('click', () => {
                 const input = document.getElementById('chatInput');
@@ -5835,6 +6361,279 @@
                         style="background-color: var(--bg-tertiary); color: var(--text-secondary);">
                     取消
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI 设置弹窗 -->
+    <div id="settingsModal" class="fixed inset-0 z-[100] hidden items-center justify-center" style="background-color: rgba(0, 0, 0, 0.5);">
+        <div class="rounded-lg shadow-xl w-[600px] max-h-[80vh] flex flex-col" style="background-color: var(--bg-secondary); border: 1px solid var(--border-color);">
+            <!-- 标题栏 -->
+            <div class="flex items-center justify-between px-6 py-4 border-b shrink-0" style="border-color: var(--border-color);">
+                <h3 class="text-lg font-semibold">AI 设置</h3>
+                <button id="closeSettingsModal" class="p-1 rounded-md hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            
+            <!-- Tab 切换 -->
+            <div class="flex border-b px-6 shrink-0" style="border-color: var(--border-color);">
+                <button id="llmTabBtn" class="settings-tab px-4 py-3 text-sm font-medium border-b-2 border-blue-500" style="color: var(--text-primary);">
+                    LLM 模型
+                </button>
+                <button id="embeddingTabBtn" class="settings-tab px-4 py-3 text-sm font-medium border-b-2 border-transparent" style="color: var(--text-secondary);">
+                    Embedding 模型
+                </button>
+            </div>
+            
+            <!-- Tab 内容 -->
+            <div class="flex-1 overflow-y-auto p-6">
+                <!-- LLM 模型配置 -->
+                <div id="llmConfigContent" class="settings-tab-content">
+                    <div class="mb-6">
+                        <h4 class="text-sm font-medium mb-3">选择 LLM 提供者</h4>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+                                   style="border-color: var(--border-color);"
+                                   data-llm-provider="lm_studio">
+                                <input type="radio" name="llmProvider" value="lm_studio" class="w-4 h-4">
+                                <div>
+                                    <div class="font-medium text-sm">本地模型 (LM Studio)</div>
+                                    <div class="text-xs opacity-60">通过 LM Studio 运行本地大模型</div>
+                                </div>
+                            </label>
+                            <label class="flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+                                   style="border-color: var(--border-color);"
+                                   data-llm-provider="ollama">
+                                <input type="radio" name="llmProvider" value="ollama" class="w-4 h-4">
+                                <div>
+                                    <div class="font-medium text-sm">本地模型 (Ollama)</div>
+                                    <div class="text-xs opacity-60">通过 Ollama 运行本地大模型</div>
+                                </div>
+                            </label>
+                            <label class="flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+                                   style="border-color: var(--border-color);"
+                                   data-llm-provider="external">
+                                <input type="radio" name="llmProvider" value="external" class="w-4 h-4">
+                                <div>
+                                    <div class="font-medium text-sm">外部 API</div>
+                                    <div class="text-xs opacity-60">使用 OpenAI 兼容格式的外部 API</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- LM Studio 配置 -->
+                    <div id="lmStudioConfig" class="mb-4 p-4 rounded-lg border" style="border-color: var(--border-color); background-color: var(--bg-primary);">
+                        <h5 class="text-sm font-medium mb-3 flex items-center gap-2">
+                            <i data-lucide="server" class="w-4 h-4"></i>
+                            LM Studio 配置
+                        </h5>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="block text-xs font-medium mb-1 opacity-70">API 地址</label>
+                                <input type="text" id="lmStudioUrl" 
+                                       class="w-full px-3 py-2 rounded-md border text-sm"
+                                       style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);"
+                                       placeholder="http://localhost:1234/v1">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium mb-1 opacity-70">模型名称</label>
+                                <input type="text" id="lmStudioModel" 
+                                       class="w-full px-3 py-2 rounded-md border text-sm"
+                                       style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);"
+                                       placeholder="qwen2.5-7b">
+                                <p class="text-xs mt-1 opacity-60">在 LM Studio 中加载的模型名称</p>
+                            </div>
+                            <div id="lmStudioStatus" class="text-xs opacity-60 hidden">
+                                <i data-lucide="check-circle" class="w-3 h-3 inline text-green-500 mr-1"></i>
+                                <span></span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Ollama 配置 -->
+                    <div id="ollamaConfig" class="mb-4 p-4 rounded-lg border hidden" style="border-color: var(--border-color); background-color: var(--bg-primary);">
+                        <h5 class="text-sm font-medium mb-3 flex items-center gap-2">
+                            <i data-lucide="cpu" class="w-4 h-4"></i>
+                            Ollama 配置
+                        </h5>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="block text-xs font-medium mb-1 opacity-70">API 地址</label>
+                                <input type="text" id="ollamaUrl" 
+                                       class="w-full px-3 py-2 rounded-md border text-sm"
+                                       style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);"
+                                       placeholder="http://localhost:11434/v1">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium mb-1 opacity-70">模型名称</label>
+                                <input type="text" id="ollamaModel" 
+                                       class="w-full px-3 py-2 rounded-md border text-sm"
+                                       style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);"
+                                       placeholder="llama3">
+                                <p class="text-xs mt-1 opacity-60">在 Ollama 中下载的模型名称</p>
+                            </div>
+                            <div id="ollamaStatus" class="text-xs opacity-60 hidden">
+                                <i data-lucide="check-circle" class="w-3 h-3 inline text-green-500 mr-1"></i>
+                                <span></span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 外部 API 配置 -->
+                    <div id="externalApiConfig" class="mb-4 p-4 rounded-lg border hidden" style="border-color: var(--border-color); background-color: var(--bg-primary);">
+                        <h5 class="text-sm font-medium mb-3 flex items-center gap-2">
+                            <i data-lucide="cloud" class="w-4 h-4"></i>
+                            外部 API 配置
+                        </h5>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="block text-xs font-medium mb-1 opacity-70">API 地址</label>
+                                <input type="text" id="externalApiUrl" 
+                                       class="w-full px-3 py-2 rounded-md border text-sm"
+                                       style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);"
+                                       placeholder="https://api.openai.com/v1">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium mb-1 opacity-70">API Key</label>
+                                <input type="password" id="externalApiKey" 
+                                       class="w-full px-3 py-2 rounded-md border text-sm"
+                                       style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);"
+                                       placeholder="sk-...">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium mb-1 opacity-70">模型名称</label>
+                                <input type="text" id="externalApiModel" 
+                                       class="w-full px-3 py-2 rounded-md border text-sm"
+                                       style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);"
+                                       placeholder="gpt-4o-mini">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Embedding 模型配置 -->
+                <div id="embeddingConfigContent" class="settings-tab-content hidden">
+                    <div class="mb-6">
+                        <h4 class="text-sm font-medium mb-3">选择 Embedding 提供者</h4>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+                                   style="border-color: var(--border-color);"
+                                   data-embedding-provider="default">
+                                <input type="radio" name="embeddingProvider" value="default" class="w-4 h-4">
+                                <div>
+                                    <div class="font-medium text-sm">默认配置 (CLAP)</div>
+                                    <div class="text-xs opacity-60">使用内置的 CLAP 音频-文本嵌入模型</div>
+                                </div>
+                            </label>
+                            <label class="flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+                                   style="border-color: var(--border-color);"
+                                   data-embedding-provider="local">
+                                <input type="radio" name="embeddingProvider" value="local" class="w-4 h-4">
+                                <div>
+                                    <div class="font-medium text-sm">本地模型</div>
+                                    <div class="text-xs opacity-60">使用 LM Studio 或 Ollama 的 Embedding 模型</div>
+                                </div>
+                            </label>
+                            <label class="flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+                                   style="border-color: var(--border-color);"
+                                   data-embedding-provider="external">
+                                <input type="radio" name="embeddingProvider" value="external" class="w-4 h-4">
+                                <div>
+                                    <div class="font-medium text-sm">外部 API</div>
+                                    <div class="text-xs opacity-60">使用 OpenAI 兼容格式的 Embedding API</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- 本地 Embedding 配置 -->
+                    <div id="localEmbeddingConfig" class="mb-4 p-4 rounded-lg border hidden" style="border-color: var(--border-color); background-color: var(--bg-primary);">
+                        <h5 class="text-sm font-medium mb-3 flex items-center gap-2">
+                            <i data-lucide="server" class="w-4 h-4"></i>
+                            本地 Embedding 配置
+                        </h5>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="block text-xs font-medium mb-1 opacity-70">类型</label>
+                                <select id="localEmbeddingType" 
+                                        class="w-full px-3 py-2 rounded-md border text-sm"
+                                        style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);">
+                                    <option value="lm_studio">LM Studio</option>
+                                    <option value="ollama">Ollama</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium mb-1 opacity-70">API 地址</label>
+                                <input type="text" id="localEmbeddingUrl" 
+                                       class="w-full px-3 py-2 rounded-md border text-sm"
+                                       style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);"
+                                       placeholder="http://localhost:1234/v1">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium mb-1 opacity-70">模型名称</label>
+                                <input type="text" id="localEmbeddingModel" 
+                                       class="w-full px-3 py-2 rounded-md border text-sm"
+                                       style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);"
+                                       placeholder="embedding-model">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 外部 Embedding 配置 -->
+                    <div id="externalEmbeddingConfig" class="mb-4 p-4 rounded-lg border hidden" style="border-color: var(--border-color); background-color: var(--bg-primary);">
+                        <h5 class="text-sm font-medium mb-3 flex items-center gap-2">
+                            <i data-lucide="cloud" class="w-4 h-4"></i>
+                            外部 Embedding API
+                        </h5>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="block text-xs font-medium mb-1 opacity-70">API 地址</label>
+                                <input type="text" id="externalEmbeddingUrl" 
+                                       class="w-full px-3 py-2 rounded-md border text-sm"
+                                       style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);"
+                                       placeholder="https://api.openai.com/v1">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium mb-1 opacity-70">API Key</label>
+                                <input type="password" id="externalEmbeddingKey" 
+                                       class="w-full px-3 py-2 rounded-md border text-sm"
+                                       style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);"
+                                       placeholder="sk-...">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium mb-1 opacity-70">模型名称</label>
+                                <input type="text" id="externalEmbeddingModel" 
+                                       class="w-full px-3 py-2 rounded-md border text-sm"
+                                       style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);"
+                                       placeholder="text-embedding-3-small">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 底部按钮 -->
+            <div class="flex items-center justify-between px-6 py-4 border-t shrink-0" style="border-color: var(--border-color);">
+                <button id="testConnectionBtn"
+                        class="px-4 py-2 rounded-md text-sm font-medium transition-colors hover:opacity-80"
+                        style="background-color: var(--bg-tertiary); color: var(--text-secondary);">
+                    <i data-lucide="wifi" class="w-4 h-4 inline mr-1"></i>
+                    测试连接
+                </button>
+                <div class="flex gap-3">
+                    <button id="cancelSettingsBtn"
+                            class="px-4 py-2 rounded-md text-sm font-medium transition-colors hover:opacity-80"
+                            style="background-color: var(--bg-tertiary); color: var(--text-secondary);">
+                        取消
+                    </button>
+                    <button id="saveSettingsBtn"
+                            class="px-4 py-2 rounded-md text-sm font-medium transition-colors hover:opacity-80"
+                            style="background-color: #3b82f6; color: white;">
+                        保存配置
+                    </button>
+                </div>
             </div>
         </div>
     </div>
