@@ -991,31 +991,40 @@ async function startBackendServer() {
         backendProcess = null;
       });
 
-      // 等待服务启动
+      // 等待服务启动和模型加载
       await new Promise((resolve, reject) => {
         let retries = 0;
-        const maxHealthChecks = 15;
+        const maxHealthChecks = 30;  // 增加重试次数，给模型加载更多时间
 
-        const checkServer = setInterval(() => {
-          fetch(`${API_BASE_URL}/health`)
-            .then((response) => {
-              if (response.ok) {
+        const checkServer = setInterval(async () => {
+          try {
+            // 先检查服务是否启动
+            const healthResponse = await fetch(`${API_BASE_URL}/health`);
+            if (!healthResponse.ok) {
+              throw new Error(`健康检查失败: ${healthResponse.status}`);
+            }
+
+            // 再检查模型是否加载完成
+            const modelResponse = await fetch(`${API_BASE_URL}/model/status`);
+            if (modelResponse.ok) {
+              const modelStatus = await modelResponse.json();
+              if (modelStatus.loaded) {
                 clearInterval(checkServer);
-                isStarting = false;  // 启动完成，停止输出日志
-                console.log('[Backend] 服务健康检查通过');
+                isStarting = false;
+                console.log('[Backend] 服务启动完成，模型已加载');
                 resolve();
               } else {
-                throw new Error(`健康检查失败: ${response.status}`);
+                console.log(`[Backend] 等待模型加载... (${retries}/${maxHealthChecks})`);
               }
-            })
-            .catch((err) => {
-              retries++;
-              console.log(`[Backend] 等待服务启动... (${retries}/${maxHealthChecks})`);
-              if (retries >= maxHealthChecks) {
-                clearInterval(checkServer);
-                reject(new Error(`服务启动超时\n启动输出: ${startupOutput}\n错误输出: ${errorOutput}`));
-              }
-            });
+            }
+          } catch (err) {
+            retries++;
+            console.log(`[Backend] 等待服务启动... (${retries}/${maxHealthChecks})`);
+            if (retries >= maxHealthChecks) {
+              clearInterval(checkServer);
+              reject(new Error(`服务启动超时\n启动输出: ${startupOutput}\n错误输出: ${errorOutput}`));
+            }
+          }
         }, 1000);
       });
 
