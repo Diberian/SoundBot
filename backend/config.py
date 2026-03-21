@@ -75,7 +75,26 @@ HF_ENDPOINT = "https://hf-mirror.com"
 #   arXiv preprint arXiv:2211.06687.
 #   https://huggingface.co/laion/larger_clap_general
 #
-CLAP_MODEL_NAME = os.getenv("CLAP_MODEL", "laion/larger_clap_general")
+
+# 优先使用环境变量指定的模型路径（Electron 传递）
+# 其次使用本地模型目录
+# 最后回退到 HuggingFace
+ENV_MODEL_PATH = os.getenv("SOUNDBOT_MODELS_PATH")
+LOCAL_MODEL_PATH = BASE_DIR.parent / "models" / "clap"
+
+if ENV_MODEL_PATH:
+    # Electron 传递的模型路径
+    env_clap_path = Path(ENV_MODEL_PATH) / "clap"
+    if env_clap_path.exists():
+        CLAP_MODEL_NAME = str(env_clap_path)
+    else:
+        CLAP_MODEL_NAME = os.getenv("CLAP_MODEL", "laion/larger_clap_general")
+elif LOCAL_MODEL_PATH.exists():
+    # 本地模型目录
+    CLAP_MODEL_NAME = str(LOCAL_MODEL_PATH)
+else:
+    # 回退到 HuggingFace
+    CLAP_MODEL_NAME = os.getenv("CLAP_MODEL", "laion/larger_clap_general")
 CLAP_DEVICE = "auto"  # auto/cpu/cuda/mps
 
 # 模型加载超时（秒）

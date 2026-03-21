@@ -34,6 +34,64 @@ let backendProcess = null;
 const BACKEND_PORT = 8000;
 const API_BASE_URL = `http://127.0.0.1:${BACKEND_PORT}/api/v1`;
 
+// ==================== 路径辅助函数 ====================
+
+/**
+ * 获取应用资源路径
+ * 开发环境：项目根目录
+ * 生产环境：app.asar 解压后的资源目录
+ */
+function getAppPath() {
+  if (app.isPackaged) {
+    // 生产环境：resources/app.asar.unpacked
+    return path.join(process.resourcesPath, 'app.asar.unpacked');
+  }
+  // 开发环境：项目根目录
+  return __dirname;
+}
+
+/**
+ * 获取后端路径
+ */
+function getBackendPath() {
+  const possiblePaths = [
+    // 开发环境
+    path.join(__dirname, 'backend'),
+    // 生产环境（extraResources）
+    path.join(process.resourcesPath, 'backend'),
+    // 备用路径
+    path.join(getAppPath(), 'backend')
+  ];
+  
+  for (const p of possiblePaths) {
+    if (fs.existsSync(path.join(p, 'main.py'))) {
+      return p;
+    }
+  }
+  
+  // 默认返回第一个路径
+  return possiblePaths[0];
+}
+
+/**
+ * 获取模型路径
+ */
+function getModelsPath() {
+  const possiblePaths = [
+    path.join(process.resourcesPath, 'models'),
+    path.join(getAppPath(), 'models'),
+    path.join(__dirname, 'models')
+  ];
+  
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      return p;
+    }
+  }
+  
+  return possiblePaths[0];
+}
+
 function createWindow() {
   // 创建浏览器窗口
   mainWindow = new BrowserWindow({
@@ -823,13 +881,17 @@ async function startBackendServer() {
       console.log(`[Backend] 启动尝试 ${attempt}/${maxRetries}...`);
 
       // 查找后端路径
-      const backendPath = path.join(__dirname, 'backend');
+      const backendPath = getBackendPath();
       const mainPy = path.join(backendPath, 'main.py');
+      const modelsPath = getModelsPath();
+
+      console.log(`[Backend] 后端路径: ${backendPath}`);
+      console.log(`[Backend] 模型路径: ${modelsPath}`);
 
       // 检查后端文件是否存在
       if (!fs.existsSync(mainPy)) {
-        const files = fs.readdirSync(backendPath);
-        console.log('Backend files:', files);
+        console.error('[Backend] 错误: main.py 不存在');
+        console.error('[Backend] 尝试过的路径:', getBackendPath());
         return { success: false, error: '后端文件不存在' };
       }
 
@@ -861,7 +923,11 @@ async function startBackendServer() {
       // 启动后端进程
       backendProcess = spawn(pythonCmd, [mainPy], {
         cwd: backendPath,
-        env: { ...process.env, PYTHONUNBUFFERED: '1' },
+        env: { 
+          ...process.env, 
+          PYTHONUNBUFFERED: '1',
+          SOUNDBOT_MODELS_PATH: modelsPath  // 传递模型路径给后端
+        },
         stdio: ['ignore', 'pipe', 'pipe']
       });
 
