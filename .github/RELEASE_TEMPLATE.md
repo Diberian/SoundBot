@@ -53,6 +53,14 @@
 - **智能分类** - 自动按 UCS 标准分类音效
 - **Smart Categorization** - Auto-categorize sounds by UCS standards
 
+### 🤖 AI 对话助手 / AI Chat Assistant
+- **多 LLM 支持** - 支持 OpenAI、Azure、Gemini、Kimi、Claude、DeepSeek、SiliconFlow 等
+- **Multi-LLM Support** - Support OpenAI, Azure, Gemini, Kimi, Claude, DeepSeek, SiliconFlow, etc.
+- **智能音效推荐** - 根据场景描述推荐合适的音效
+- **Smart Sound Recommendation** - Recommend suitable sounds based on scene descriptions
+- **音效知识问答** - 解答音效制作、UCS 分类等问题
+- **Sound Knowledge Q&A** - Answer sound production, UCS categorization questions
+
 ### 🔧 高级功能 / Advanced Features
 - **音频处理** - 淡入淡出、片段导出
 - **Audio Processing** - Fade in/out, clip export
@@ -73,13 +81,31 @@ Download and install the package for your system
 应用会自动启动后端服务和加载 AI 模型（约需 10-30 秒）  
 The app will auto-start backend and load AI model (takes 10-30 seconds)
 
-### 3. 导入音效 / Import Sounds
+### 3. 配置 AI 助手（可选）/ Configure AI Assistant (Optional)
+点击"设置" → "AI 配置"添加你的 LLM API 密钥  
+Click "Settings" → "AI Config" to add your LLM API key
+
+**支持的 LLM 服务 / Supported LLM Services:**
+- OpenAI (GPT-4, GPT-3.5)
+- Azure OpenAI
+- Google Gemini
+- Moonshot Kimi
+- Anthropic Claude
+- DeepSeek
+- SiliconFlow
+- 自定义 API / Custom API
+
+### 4. 导入音效 / Import Sounds
 点击"导入" → "导入文件夹"选择你的音效文件夹  
 Click "Import" → "Import Folder" to select your sound folder
 
-### 4. 开始搜索 / Start Searching
+### 5. 开始搜索 / Start Searching
 在搜索框输入描述（如"雨声"、"科幻"）查找音效  
 Type descriptions (e.g., "rain", "sci-fi") in the search box
+
+### 6. 使用 AI 助手 / Use AI Assistant
+点击右下角的 AI 助手图标，描述你需要的音效场景  
+Click the AI assistant icon at bottom right, describe your sound scene
 
 ---
 
@@ -181,3 +207,5 @@ Having issues? Please submit an Issue:
 
 **感谢使用 SoundBot！**  
 **Thank you for using SoundBot!**
+
+🎵 让音效管理更智能 / Make sound management smarter 🎵
