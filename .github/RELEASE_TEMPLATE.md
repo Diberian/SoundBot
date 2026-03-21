@@ -41,11 +41,21 @@
 - **CLAP 模型** - 使用先进的音频-文本嵌入模型理解音频内容
 - **CLAP Model** - Advanced audio-text embedding model for understanding audio content
 
-### 🎵 音频播放 / Audio Playback
+### 🎵 音频预览 / Audio Preview
 - **波形可视化** - 实时显示音频波形
 - **Waveform Visualization** - Real-time audio waveform display
-- **区域选择** - 选择并循环播放特定片段
-- **Region Selection** - Select and loop specific segments
+- **区域选择** - 选择特定片段循环播放
+- **Region Selection** - Select specific segments for loop playback
+- **选区截取** - 拖拽选区到 DAW 直接使用
+- **Clip Export** - Drag selected region to DAW for direct use
+
+**⚠️ 存储空间提醒 / Storage Reminder:**
+- 默认临时文件存储在应用目录，可在设置中更改
+- Default temp files are stored in app directory, can be changed in settings
+- 定期清理临时文件以释放空间
+- Regularly clean temp files to free up space
+- **清理前请确保 DAW 工程不再引用这些文件**
+- **Ensure DAW projects no longer reference these files before cleaning**
 
 ### 📁 项目管理 / Project Management
 - **多项目管理** - 创建和管理多个音效库项目
