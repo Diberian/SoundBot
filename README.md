@@ -239,11 +239,22 @@ npm run build
 
 ---
 
-## 📄 许可证
+## 📄 许可证与商标
+
+### 软件许可证
 
 **GPL-3.0** - 详见 [LICENSE](LICENSE) 文件
 
 使用本软件即表示您同意 GPL-3.0 许可证条款。任何衍生作品必须同样以 GPL-3.0 开源。
+
+### 商标声明
+
+**"SoundBot"** 和 SoundBot Logo 是 [Nagisa_Huckrick](https://github.com/Nagisa_Huckrick) 的商标。
+
+本许可证不授予使用商标的权利。未经书面许可，不得：
+- 使用 "SoundBot" 作为衍生产品的名称
+- 使用 SoundBot Logo 或类似标识
+- 暗示与原作者的关联或认可
 
 ### 第三方组件许可
 

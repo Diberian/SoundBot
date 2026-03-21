@@ -1,4 +1,19 @@
 # -*- coding: utf-8 -*-
+# SoundBot - AI 音效管理器
+# Copyright (C) 2026 Nagisa_Huckrick (胡杨)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 # 语义搜索模块
 
 """接收文本查询，生成 embedding，在 ChromaDB 中搜索最相似的音频。返回 Top-K 结果，包含文件路径和相似度分数。"""
