@@ -1134,20 +1134,29 @@ app.whenReady().then(async () => {
 
 // 所有窗口关闭时退出应用（macOS 除外）
 app.on('window-all-closed', async () => {
-  // 停止后端服务
-  if (backendProcess) {
-    await stopBackendServer();
-  }
-  
+  // macOS 上保持后端运行，其他平台停止后端
   if (process.platform !== 'darwin') {
+    if (backendProcess) {
+      await stopBackendServer();
+    }
     app.quit();
   }
+  // macOS: 窗口关闭但应用继续运行，后端保持运行
 });
 
-app.on('activate', () => {
+app.on('activate', async () => {
   // macOS 上重新创建窗口
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
+    // 确保后端正在运行
+    if (!backendProcess) {
+      console.log('[Backend] 重新创建窗口，启动后端...');
+      try {
+        await startBackendServer();
+      } catch (error) {
+        console.error('重新启动后端失败:', error);
+      }
+    }
   }
 });
 
