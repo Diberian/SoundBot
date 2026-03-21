@@ -21,6 +21,7 @@ const i18n = {
             'search': '搜索',
             'settings': '设置',
             'help': '帮助',
+            'select': '选择',
             
             // 语言设置
             'lang.zh': '中文',
@@ -48,6 +49,10 @@ const i18n = {
             // 视图菜单
             'view.dark.mode': '深色模式',
             'view.light.mode': '浅色模式',
+            
+            // 主题切换
+            'theme.dark': '切换深色模式',
+            'theme.light': '切换浅色模式',
             
             // 工具菜单
             'tools.reindex': '重新索引',
@@ -121,6 +126,12 @@ const i18n = {
             'folder.rename': '重命名',
             'folder.delete': '删除文件夹',
             'folder.import.here': '导入到此文件夹',
+            'folder.new.title': '新建文件夹',
+            'folder.new.placeholder': '请输入文件夹名称',
+            'folder.new.sibling': '新建同级文件夹',
+            'folder.rename.title': '重命名文件夹',
+            'folder.rename.placeholder': '请输入新名称',
+            'folder.move.to': '移动到',
             
             // 分类
             'category.title': '分类',
@@ -132,6 +143,14 @@ const i18n = {
             'project.rename': '重命名工程',
             'project.delete': '删除工程',
             'project.recent': '最近打开',
+            'project.new.title': '新建工程',
+            'project.name': '工程名称',
+            'project.name.placeholder': '输入工程名称',
+            'project.description': '工程描述',
+            'project.desc.placeholder': '输入工程描述（可选）',
+            'project.temp.dir.placeholder': '使用默认目录（可选）',
+            'project.temp.dir.hint': '不选择则使用全局默认临时文件目录',
+            'project.create': '创建工程',
             
             // 设置
             'settings.title': '设置',
@@ -189,6 +208,7 @@ const i18n = {
             'confirm.delete': '确定要删除吗？',
             'confirm.delete.permanent': '此操作不可恢复，确定要永久删除吗？',
             'confirm.switch.project': '切换工程前请保存当前工作',
+            'confirm.delete.folder': '确定要删除文件夹 "{{name}}" 吗？\n\n注意：删除文件夹不会删除音频文件，只是移除分类。',
             
             // 状态
             'status.ready': '就绪',
@@ -198,6 +218,10 @@ const i18n = {
             'status.completed': '完成',
             'status.analyzing': '分析波形',
             'status.saving': '保存数据',
+            
+            // 空状态
+            'empty.import.audio': '请导入音频文件',
+            'empty.folder.create': '暂无文件夹，点击上方按钮创建',
         },
         
         en: {
@@ -215,6 +239,7 @@ const i18n = {
             'search': 'Search',
             'settings': 'Settings',
             'help': 'Help',
+            'select': 'Select',
             
             // Language settings
             'lang.zh': '中文',
@@ -242,6 +267,10 @@ const i18n = {
             // View menu
             'view.dark.mode': 'Dark Mode',
             'view.light.mode': 'Light Mode',
+            
+            // Theme
+            'theme.dark': 'Switch to Dark Mode',
+            'theme.light': 'Switch to Light Mode',
             
             // Tools menu
             'tools.reindex': 'Reindex',
@@ -315,6 +344,12 @@ const i18n = {
             'folder.rename': 'Rename',
             'folder.delete': 'Delete Folder',
             'folder.import.here': 'Import to this folder',
+            'folder.new.title': 'New Folder',
+            'folder.new.placeholder': 'Enter folder name',
+            'folder.new.sibling': 'New Sibling Folder',
+            'folder.rename.title': 'Rename Folder',
+            'folder.rename.placeholder': 'Enter new name',
+            'folder.move.to': 'Move to',
             
             // Category
             'category.title': 'Categories',
@@ -326,6 +361,14 @@ const i18n = {
             'project.rename': 'Rename Project',
             'project.delete': 'Delete Project',
             'project.recent': 'Recent',
+            'project.new.title': 'New Project',
+            'project.name': 'Project Name',
+            'project.name.placeholder': 'Enter project name',
+            'project.description': 'Project Description',
+            'project.desc.placeholder': 'Enter project description (optional)',
+            'project.temp.dir.placeholder': 'Use default directory (optional)',
+            'project.temp.dir.hint': 'If not selected, global default temp directory will be used',
+            'project.create': 'Create Project',
             
             // Settings
             'settings.title': 'Settings',
@@ -383,6 +426,7 @@ const i18n = {
             'confirm.delete': 'Are you sure you want to delete?',
             'confirm.delete.permanent': 'This action cannot be undone. Are you sure?',
             'confirm.switch.project': 'Please save your work before switching projects',
+            'confirm.delete.folder': 'Are you sure you want to delete folder "{{name}}"?\n\nNote: Deleting a folder will not delete audio files, only remove the classification.',
             
             // Status
             'status.ready': 'Ready',
@@ -392,6 +436,10 @@ const i18n = {
             'status.completed': 'Completed',
             'status.analyzing': 'Analyzing Waveform',
             'status.saving': 'Saving Data',
+            
+            // Empty states
+            'empty.import.audio': 'Please import audio files',
+            'empty.folder.create': 'No folders yet, click the button above to create',
         }
     },
     

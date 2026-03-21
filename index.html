@@ -186,8 +186,8 @@
                     <button id="themeToggle" class="w-full px-4 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-2">
                         <i data-lucide="moon" id="themeIconMoon" class="w-4 h-4"></i>
                         <i data-lucide="sun" id="themeIconSun" class="w-4 h-4 hidden"></i>
-                        <span id="themeTextLight">切换深色模式</span>
-                        <span id="themeTextDark" class="hidden">切换浅色模式</span>
+                        <span id="themeTextLight" data-i18n="theme.dark">切换深色模式</span>
+                        <span id="themeTextDark" class="hidden" data-i18n="theme.light">切换浅色模式</span>
                     </button>
                 </div>
             </div>
@@ -1454,7 +1454,8 @@
             // 如果没有用户文件夹，显示提示
             if (userFolders.length === 0 && importedFolderData.length === 0) {
                 const emptyTip = document.createElement('div');
-                emptyTip.className = 'text-xs opacity-50 px-4 py-2';
+                emptyTip.className = 'text-xs opacity-50 px-4 py-2 i18n-empty-folder';
+                emptyTip.setAttribute('data-i18n', 'empty.folder.create');
                 emptyTip.textContent = '暂无文件夹，点击上方按钮创建';
                 container.appendChild(emptyTip);
                 return;
@@ -1635,14 +1636,14 @@
             if (type === 'user') {
                 // 用户文件夹菜单
                 menuItems.push(
-                    { label: '新建同级文件夹', icon: 'folder-plus', action: () => showInputModal('新建文件夹', '请输入文件夹名称:', (name) => { if (name) createUserFolder(name); }) },
-                    { label: '重命名', icon: 'edit-3', action: () => showInputModal('重命名文件夹', '请输入新名称:', (name) => { if (name) renameUserFolder(folder.id, name); }, folder.name) },
-                    { label: '删除', icon: 'trash-2', action: () => { if (confirm(`确定要删除文件夹 "${folder.name}" 吗？\n\n注意：删除文件夹不会删除音频文件，只是移除分类。`)) deleteUserFolder(folder.id); }, danger: true }
+                    { label: i18n.t('folder.new.sibling'), icon: 'folder-plus', action: () => showInputModal(i18n.t('folder.new.title'), i18n.t('folder.new.placeholder'), (name) => { if (name) createUserFolder(name); }) },
+                    { label: i18n.t('folder.rename'), icon: 'edit-3', action: () => showInputModal(i18n.t('folder.rename.title'), i18n.t('folder.rename.placeholder'), (name) => { if (name) renameUserFolder(folder.id, name); }, folder.name) },
+                    { label: i18n.t('delete'), icon: 'trash-2', action: () => { if (confirm(i18n.t('confirm.delete.folder', { name: folder.name }))) deleteUserFolder(folder.id); }, danger: true }
                 );
             } else if (type === 'imported') {
                 // 导入文件夹菜单
                 menuItems.push(
-                    { label: '移动到', icon: 'folder-input', action: () => showMoveToFolderMenu(event, folder) }
+                    { label: i18n.t('folder.move.to'), icon: 'folder-input', action: () => showMoveToFolderMenu(event, folder) }
                 );
             }
 
@@ -1924,10 +1925,10 @@
                 emptyDiv.className = 'flex items-center justify-center h-full';
                 if (soundData.length === 0) {
                     // 没有导入任何文件
-                    emptyDiv.innerHTML = `<span class="text-sm opacity-40" style="color: var(--text-secondary);">请导入音频文件</span>`;
+                    emptyDiv.innerHTML = `<span class="text-sm opacity-40 i18n-empty-import" style="color: var(--text-secondary);" data-i18n="empty.import.audio">请导入音频文件</span>`;
                 } else {
                     // 有文件但搜索无结果
-                    emptyDiv.innerHTML = `<span class="text-sm opacity-40" style="color: var(--text-secondary);">未检索到结果</span>`;
+                    emptyDiv.innerHTML = `<span class="text-sm opacity-40" style="color: var(--text-secondary);" data-i18n="search.no.results">未检索到结果</span>`;
                 }
                 container.appendChild(emptyDiv);
                 return;
@@ -5024,7 +5025,7 @@
                 addFolderBtn.addEventListener('click', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    showInputModal('新建文件夹', '请输入文件夹名称:', (name) => {
+                    showInputModal(i18n.t('folder.new.title'), i18n.t('folder.new.placeholder'), (name) => {
                         if (name && name.trim()) {
                             createUserFolder(name.trim());
                         }
@@ -6572,7 +6573,7 @@
              style="background-color: var(--bg-secondary); border: 1px solid var(--border-color);">
             <!-- 标题 -->
             <div class="flex items-center justify-between mb-6">
-                <h3 class="text-lg font-semibold">新建工程</h3>
+                <h3 class="text-lg font-semibold" data-i18n="project.new.title">新建工程</h3>
                 <button id="closeNewProjectModal" class="p-1 rounded-md hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
@@ -6581,29 +6582,29 @@
             <!-- 表单 -->
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm font-medium mb-2 opacity-80">工程名称 <span class="text-red-500">*</span></label>
-                    <input type="text" id="newProjectName" placeholder="输入工程名称"
+                    <label class="block text-sm font-medium mb-2 opacity-80"><span data-i18n="project.name">工程名称</span> <span class="text-red-500">*</span></label>
+                    <input type="text" id="newProjectName" data-i18n-placeholder="project.name.placeholder"
                            class="w-full h-10 px-3 rounded-md border text-sm transition-all focus:outline-none focus:ring-2 focus:ring-gray-500/50"
                            style="background-color: var(--bg-primary); border-color: var(--border-color); color: var(--text-primary);">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium mb-2 opacity-80">工程描述</label>
-                    <textarea id="newProjectDesc" placeholder="输入工程描述（可选）" rows="2"
+                    <label class="block text-sm font-medium mb-2 opacity-80" data-i18n="project.description">工程描述</label>
+                    <textarea id="newProjectDesc" data-i18n-placeholder="project.desc.placeholder" rows="2"
                               class="w-full px-3 py-2 rounded-md border text-sm transition-all focus:outline-none focus:ring-2 focus:ring-gray-500/50 resize-none"
                               style="background-color: var(--bg-primary); border-color: var(--border-color); color: var(--text-primary);"></textarea>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium mb-2 opacity-80">临时文件目录</label>
+                    <label class="block text-sm font-medium mb-2 opacity-80" data-i18n="settings.temp.dir">临时文件目录</label>
                     <div class="flex gap-2">
-                        <input type="text" id="newProjectTempDir" placeholder="使用默认目录（可选）" readonly
+                        <input type="text" id="newProjectTempDir" data-i18n-placeholder="project.temp.dir.placeholder" readonly
                                class="flex-1 h-10 px-3 rounded-md border text-sm transition-all focus:outline-none"
                                style="background-color: var(--bg-tertiary); border-color: var(--border-color); color: var(--text-secondary);">
                         <button id="selectProjectTempDirBtn" class="px-3 py-2 rounded-md border text-sm font-medium transition-colors hover:bg-black/5 dark:hover:bg-white/5"
-                                style="border-color: var(--border-color);">
+                                style="border-color: var(--border-color);" data-i18n="select">
                             选择
                         </button>
                     </div>
-                    <p class="text-xs mt-1 opacity-60">不选择则使用全局默认临时文件目录</p>
+                    <p class="text-xs mt-1 opacity-60" data-i18n="project.temp.dir.hint">不选择则使用全局默认临时文件目录</p>
                 </div>
             </div>
             
@@ -6611,12 +6612,12 @@
             <div class="flex justify-end gap-3 mt-6">
                 <button id="cancelNewProjectBtn"
                         class="px-4 py-2 rounded-md text-sm font-medium transition-colors hover:opacity-80"
-                        style="background-color: var(--bg-tertiary); color: var(--text-secondary);">
+                        style="background-color: var(--bg-tertiary); color: var(--text-secondary);" data-i18n="cancel">
                     取消
                 </button>
                 <button id="confirmNewProjectBtn"
                         class="px-4 py-2 rounded-md text-sm font-medium transition-colors hover:opacity-80"
-                        style="background-color: var(--text-primary); color: var(--bg-primary);">
+                        style="background-color: var(--text-primary); color: var(--bg-primary);" data-i18n="project.create">
                     创建工程
                 </button>
             </div>
