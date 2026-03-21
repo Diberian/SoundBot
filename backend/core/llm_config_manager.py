@@ -4,7 +4,7 @@ LLM 和 Embedding 配置管理器
 
 集中管理 LLM 模型和 Embedding 模型的配置，支持：
 - 本地模型：LM Studio、Ollama
-- 外部 API：OpenAI 兼容格式
+- 外部 API：OpenAI、Azure OpenAI、Gemini、Kimi、Anthropic、DeepSeek、SiliconFlow 等
 - 默认配置：CLAP 模型（写死）
 """
 
@@ -25,11 +25,126 @@ logger = get_logger(__name__)
 
 # LLM 提供者类型
 class LLMProvider:
+    # 本地
     LM_STUDIO = "lm_studio"
     OLLAMA = "ollama"
-    EXTERNAL = "external"
-    
-    ALL = [LM_STUDIO, OLLAMA, EXTERNAL]
+    # 云服务
+    OPENAI = "openai"
+    AZURE = "azure"
+    GEMINI = "gemini"
+    KIMI = "kimi"
+    ANTHROPIC = "anthropic"
+    DEEPSEEK = "deepseek"
+    SILICONFLOW = "siliconflow"
+    # 自定义
+    CUSTOM = "custom"
+
+    ALL = [LM_STUDIO, OLLAMA, OPENAI, AZURE, GEMINI, KIMI, ANTHROPIC, DEEPSEEK, SILICONFLOW, CUSTOM]
+
+
+# LLM 提供者元数据（显示名称、默认端点、API 版本等）
+LLM_PROVIDER_META: Dict[str, Dict[str, Any]] = {
+    "lm_studio": {
+        "name": "LM Studio",
+        "icon": "server",
+        "default_url": "http://localhost:1234/v1",
+        "need_api_key": False,
+        "auth_type": "none",
+        "default_model": "",
+        "description": "通过 LM Studio 运行本地大模型",
+        "supports_streaming": True,
+    },
+    "ollama": {
+        "name": "Ollama",
+        "icon": "cpu",
+        "default_url": "http://localhost:11434/v1",
+        "need_api_key": False,
+        "auth_type": "none",
+        "default_model": "",
+        "description": "通过 Ollama 运行本地大模型",
+        "supports_streaming": True,
+    },
+    "openai": {
+        "name": "OpenAI",
+        "icon": "zap",
+        "default_url": "https://api.openai.com/v1",
+        "need_api_key": True,
+        "auth_type": "bearer",
+        "default_model": "gpt-4o-mini",
+        "description": "使用 OpenAI 官方 API",
+        "supports_streaming": True,
+    },
+    "azure": {
+        "name": "Azure OpenAI",
+        "icon": "cloud",
+        "default_url": "https://YOUR_RESOURCE.openai.azure.com",
+        "need_api_key": True,
+        "auth_type": "azure",
+        "default_model": "",
+        "description": "使用 Azure OpenAI 服务",
+        "supports_streaming": True,
+    },
+    "gemini": {
+        "name": "Google Gemini",
+        "icon": "gem",
+        "default_url": "https://generativelanguage.googleapis.com",
+        "need_api_key": True,
+        "auth_type": "api_key",
+        "default_model": "gemini-2.0-flash",
+        "description": "使用 Google Gemini 模型",
+        "supports_streaming": True,
+    },
+    "kimi": {
+        "name": "Kimi (Moonshot)",
+        "icon": "moon",
+        "default_url": "https://api.moonshot.cn/v1",
+        "need_api_key": True,
+        "auth_type": "bearer",
+        "default_model": "moonshot-v1-8k",
+        "description": "使用 Kimi (Moonshot) AI 模型",
+        "supports_streaming": True,
+    },
+    "anthropic": {
+        "name": "Anthropic (Claude)",
+        "icon": "brain",
+        "default_url": "https://api.anthropic.com/v1",
+        "need_api_key": True,
+        "auth_type": "anthropic",
+        "default_model": "claude-3-haiku-20240307",
+        "description": "使用 Anthropic Claude 系列模型",
+        "supports_streaming": True,
+    },
+    "deepseek": {
+        "name": "DeepSeek",
+        "icon": "fish",
+        "default_url": "https://api.deepseek.com/v1",
+        "need_api_key": True,
+        "auth_type": "bearer",
+        "default_model": "deepseek-chat",
+        "description": "使用 DeepSeek 系列模型",
+        "supports_streaming": True,
+    },
+    "siliconflow": {
+        "name": "SiliconFlow",
+        "icon": "layers",
+        "default_url": "https://api.siliconflow.cn/v1",
+        "need_api_key": True,
+        "auth_type": "bearer",
+        "default_model": "Qwen/Qwen2.5-7B-Instruct",
+        "description": "使用 SiliconFlow 聚合的模型服务",
+        "supports_streaming": True,
+    },
+    "custom": {
+        "name": "自定义 API",
+        "icon": "settings",
+        "default_url": "https://your-api.com/v1",
+        "need_api_key": True,
+        "auth_type": "bearer",
+        "default_model": "",
+        "description": "使用其他 OpenAI 兼容格式的 API",
+        "supports_streaming": True,
+    },
+}
 
 
 # Embedding 提供者类型
@@ -37,8 +152,31 @@ class EmbeddingProvider:
     DEFAULT = "default"  # CLAP 模型（默认，写死）
     LOCAL = "local"      # 本地 Embedding
     EXTERNAL = "external"  # 外部 API
-    
+
     ALL = [DEFAULT, LOCAL, EXTERNAL]
+
+
+# Embedding 提供者元数据
+EMBEDDING_PROVIDER_META: Dict[str, Dict[str, Any]] = {
+    "default": {
+        "name": "CLAP (默认)",
+        "icon": "music",
+        "description": "使用内置的 CLAP 音频-文本嵌入模型",
+        "need_api_key": False,
+    },
+    "local": {
+        "name": "本地模型",
+        "icon": "server",
+        "description": "使用 LM Studio 或 Ollama 的 Embedding 模型",
+        "need_api_key": False,
+    },
+    "external": {
+        "name": "外部 API",
+        "icon": "cloud",
+        "description": "使用 OpenAI 或其他兼容的 Embedding API",
+        "need_api_key": True,
+    },
+}
 
 
 # 默认配置
@@ -47,37 +185,73 @@ DEFAULT_CONFIG = {
         "provider": "lm_studio",
         "lm_studio": {
             "base_url": "http://localhost:1234/v1",
-            "model": ""
+            "model": "",
         },
         "ollama": {
             "base_url": "http://localhost:11434/v1",
-            "model": ""
+            "model": "",
         },
-        "external": {
+        "openai": {
             "base_url": "https://api.openai.com/v1",
             "api_key": "",
-            "model": "gpt-4o-mini"
-        }
+            "model": "gpt-4o-mini",
+        },
+        "azure": {
+            "base_url": "https://YOUR_RESOURCE.openai.azure.com",
+            "api_key": "",
+            "model": "",
+            "api_version": "2024-02-01",
+        },
+        "gemini": {
+            "base_url": "https://generativelanguage.googleapis.com",
+            "api_key": "",
+            "model": "gemini-2.0-flash",
+        },
+        "kimi": {
+            "base_url": "https://api.moonshot.cn/v1",
+            "api_key": "",
+            "model": "moonshot-v1-8k",
+        },
+        "anthropic": {
+            "base_url": "https://api.anthropic.com/v1",
+            "api_key": "",
+            "model": "claude-3-haiku-20240307",
+        },
+        "deepseek": {
+            "base_url": "https://api.deepseek.com/v1",
+            "api_key": "",
+            "model": "deepseek-chat",
+        },
+        "siliconflow": {
+            "base_url": "https://api.siliconflow.cn/v1",
+            "api_key": "",
+            "model": "BAAI/bge-m3",
+        },
+        "custom": {
+            "base_url": "https://your-api.com/v1",
+            "api_key": "",
+            "model": "",
+        },
     },
     "embedding": {
         "provider": "default",
         "default": {
             "model_name": "laion/larger_clap_general",
             "dimension": 512,
-            "description": "CLAP 音频-文本嵌入模型（默认）"
+            "description": "CLAP 音频-文本嵌入模型（默认）",
         },
         "local": {
             "type": "lm_studio",
             "base_url": "http://localhost:1234/v1",
-            "model": ""
+            "model": "",
         },
         "external": {
             "base_url": "https://api.openai.com/v1",
             "api_key": "",
             "model": "text-embedding-3-small",
-            "dimension": 1536
-        }
-    }
+            "dimension": 1536,
+        },
+    },
 }
 
 
@@ -193,30 +367,25 @@ class LLMConfigManager:
         """获取当前 LLM 配置（解析后的）"""
         llm_config = self.get_llm_config()
         provider = llm_config.get("provider", "lm_studio")
-        
-        if provider == LLMProvider.LM_STUDIO:
-            cfg = llm_config.get("lm_studio", {})
+
+        # 获取对应 provider 的配置，使用默认值
+        meta = LLM_PROVIDER_META.get(provider, LLM_PROVIDER_META["custom"])
+        provider_cfg = llm_config.get(provider, {})
+        default_model = meta.get("default_model", "")
+
+        if provider in (LLMProvider.LM_STUDIO, LLMProvider.OLLAMA):
             return LLMConfig(
                 provider=provider,
-                base_url=cfg.get("base_url", "http://localhost:1234/v1"),
-                model=cfg.get("model", ""),
+                base_url=provider_cfg.get("base_url", meta.get("default_url", "")),
+                model=provider_cfg.get("model", default_model),
                 api_key=""
             )
-        elif provider == LLMProvider.OLLAMA:
-            cfg = llm_config.get("ollama", {})
+        else:
             return LLMConfig(
                 provider=provider,
-                base_url=cfg.get("base_url", "http://localhost:11434/v1"),
-                model=cfg.get("model", ""),
-                api_key=""
-            )
-        else:  # external
-            cfg = llm_config.get("external", {})
-            return LLMConfig(
-                provider=provider,
-                base_url=cfg.get("base_url", "https://api.openai.com/v1"),
-                model=cfg.get("model", "gpt-4o-mini"),
-                api_key=cfg.get("api_key", "")
+                base_url=provider_cfg.get("base_url", meta.get("default_url", "")),
+                model=provider_cfg.get("model", default_model),
+                api_key=provider_cfg.get("api_key", "")
             )
     
     def get_current_embedding_config(self) -> EmbeddingConfig:
@@ -255,14 +424,12 @@ class LLMConfigManager:
     def update_llm_config(self, provider: str, provider_config: dict):
         """更新 LLM 配置"""
         self._config["llm"]["provider"] = provider
-        
-        if provider == LLMProvider.LM_STUDIO:
-            self._config["llm"]["lm_studio"].update(provider_config)
-        elif provider == LLMProvider.OLLAMA:
-            self._config["llm"]["ollama"].update(provider_config)
-        else:  # external
-            self._config["llm"]["external"].update(provider_config)
-        
+
+        # 确保 provider 配置存在
+        if provider not in self._config["llm"]:
+            self._config["llm"][provider] = {}
+
+        self._config["llm"][provider].update(provider_config)
         self._save_config(self._config)
     
     def update_embedding_config(self, provider: str, provider_config: dict):
@@ -482,13 +649,17 @@ class LLMConfigManager:
     def export_config(self) -> dict:
         """导出当前配置（不含敏感信息）"""
         config = self._config.copy()
-        
-        # 隐藏 API Key
-        if config.get("llm", {}).get("external", {}).get("api_key"):
-            config["llm"]["external"]["api_key"] = "***"
+
+        # 隐藏所有 provider 的 API Key
+        llm_providers = config.get("llm", {})
+        for provider_key in LLMProvider.ALL:
+            provider_cfg = llm_providers.get(provider_key, {})
+            if provider_cfg.get("api_key"):
+                provider_cfg["api_key"] = "***"
+
         if config.get("embedding", {}).get("external", {}).get("api_key"):
             config["embedding"]["external"]["api_key"] = "***"
-        
+
         return config
     
     def reset_to_defaults(self):

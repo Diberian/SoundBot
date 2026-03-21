@@ -19,10 +19,10 @@ const API_BASE_URL = `http://127.0.0.1:${BACKEND_PORT}/api/v1`;
 function createWindow() {
   // 创建浏览器窗口
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
-    minWidth: 1280,
-    minHeight: 800,
+    width: 1440,
+    height: 900,
+    minWidth: 1400,
+    minHeight: 900,
     title: 'SoundMind - AI 音效管理器',
     icon: path.join(__dirname, 'assets/icon.png'), // 可选：应用图标
     webPreferences: {
@@ -49,7 +49,10 @@ function createWindow() {
           "font-src 'self' https://fonts.gstatic.com; " +
           "img-src 'self' data: blob:; " +
           "media-src 'self' blob: soundmind-audio:; " +
-          "connect-src 'self' http://127.0.0.1:8000 ws://127.0.0.1:8000;"
+          "connect-src 'self' http://127.0.0.1:8000 ws://127.0.0.1:8000 " +
+          "https://api.openai.com https://api.moonshot.cn https://api.anthropic.com " +
+          "https://api.deepseek.com https://api.siliconflow.cn " +
+          "https://generativelanguage.googleapis.com https://*.openai.azure.com;"
         ]
       }
     });
