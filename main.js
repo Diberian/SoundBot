@@ -55,21 +55,25 @@ function getAppPath() {
  */
 function getBackendPath() {
   const possiblePaths = [
+    // 生产环境（extraResources）- 优先检查
+    path.join(process.resourcesPath, 'backend'),
     // 开发环境
     path.join(__dirname, 'backend'),
-    // 生产环境（extraResources）
-    path.join(process.resourcesPath, 'backend'),
     // 备用路径
     path.join(getAppPath(), 'backend')
   ];
   
   for (const p of possiblePaths) {
-    if (fs.existsSync(path.join(p, 'main.py'))) {
+    const mainPy = path.join(p, 'main.py');
+    console.log(`[Backend] 检查路径: ${p}, main.py 存在: ${fs.existsSync(mainPy)}`);
+    if (fs.existsSync(mainPy)) {
+      console.log(`[Backend] 找到后端路径: ${p}`);
       return p;
     }
   }
   
   // 默认返回第一个路径
+  console.log(`[Backend] 警告: 未找到后端路径，使用默认值: ${possiblePaths[0]}`);
   return possiblePaths[0];
 }
 
