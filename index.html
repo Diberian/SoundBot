@@ -535,6 +535,11 @@
         let playbackWsClientId = null;
         let useBackendPlayback = false;  // 是否使用后端流式播放
 
+        // WebSocket 重连配置
+        let playbackWsReconnectAttempts = 0;
+        const PLAYBACK_WS_MAX_RECONNECT_ATTEMPTS = 5;
+        const PLAYBACK_WS_RECONNECT_DELAY = 3000; // 3秒
+
         // 连接到后端播放状态 WebSocket
         function connectPlaybackWebSocket(clientId) {
             if (playbackWebSocket && playbackWebSocket.readyState === WebSocket.OPEN) {
@@ -549,6 +554,7 @@
 
                 playbackWebSocket.onopen = () => {
                     console.log('[Playback WS] 连接已建立');
+                    playbackWsReconnectAttempts = 0; // 重置重连计数
                     // 发送心跳
                     playbackWebSocket.send(JSON.stringify({type: 'ping'}));
                 };
@@ -569,12 +575,28 @@
                     console.error('[Playback WS] 连接错误:', error);
                 };
 
-                playbackWebSocket.onclose = () => {
-                    console.log('[Playback WS] 连接已关闭');
+                playbackWebSocket.onclose = (event) => {
+                    console.log('[Playback WS] 连接已关闭', event.code, event.reason);
                     playbackWebSocket = null;
+                    
+                    // 自动重连（如果不是正常关闭）
+                    if (!event.wasClean && playbackWsReconnectAttempts < PLAYBACK_WS_MAX_RECONNECT_ATTEMPTS) {
+                        playbackWsReconnectAttempts++;
+                        console.log(`[Playback WS] ${PLAYBACK_WS_RECONNECT_DELAY/1000}秒后尝试第${playbackWsReconnectAttempts}次重连...`);
+                        setTimeout(() => {
+                            connectPlaybackWebSocket(clientId);
+                        }, PLAYBACK_WS_RECONNECT_DELAY);
+                    }
                 };
             } catch (error) {
                 console.error('[Playback WS] 创建连接失败:', error);
+                // 尝试重连
+                if (playbackWsReconnectAttempts < PLAYBACK_WS_MAX_RECONNECT_ATTEMPTS) {
+                    playbackWsReconnectAttempts++;
+                    setTimeout(() => {
+                        connectPlaybackWebSocket(clientId);
+                    }, PLAYBACK_WS_RECONNECT_DELAY);
+                }
             }
         }
 

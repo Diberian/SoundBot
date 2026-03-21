@@ -144,7 +144,7 @@ CURRENT_PROJECT_ID = "default"
 # ==================== 搜索配置 ====================
 
 TOP_K_RESULTS = 1000  # 默认返回 1000 个结果（几乎无限制）
-SIMILARITY_THRESHOLD = 0.05  # 相似度阈值（降低以便让更多语义相关结果通过）
+SIMILARITY_THRESHOLD = 0.15  # 相似度阈值（提高以获得更精确的搜索结果）
 
 # 搜索权重配置
 KEYWORD_BOOST_FACTOR = 1.2   # 关键词匹配加权因子

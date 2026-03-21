@@ -180,20 +180,21 @@ class OptimizedAudioSearcher(AudioSearcher):
             最终评分 (0.0-1.0)
         """
         if match_level == "exact":
-            # 精确匹配：0.95-1.0，关键词主导
-            return 0.95 + min(keyword_score * 0.05, 0.05)
+            # 精确匹配：1.0，给予最高分
+            return 1.0
 
         elif match_level == "partial":
-            # 部分匹配：0.70-0.90，关键词加权
-            return 0.70 + min(keyword_score * 0.20, 0.20)
+            # 部分匹配：0.80-0.95，关键词加权
+            return 0.80 + min(keyword_score * 0.15, 0.15)
 
         elif match_level == "weak":
-            # 弱匹配：关键词和语义各占一半
-            return keyword_score * 0.5 + semantic_score * 0.5
+            # 弱匹配：0.60-0.80，关键词和语义混合
+            base_score = max(keyword_score * 0.6, semantic_score * 0.4)
+            return 0.60 + min(base_score * 0.20, 0.20)
 
         else:  # "none"
-            # 无关键词匹配：纯语义，不衰减
-            return semantic_score * self._semantic_decay
+            # 无关键词匹配：纯语义，适当衰减
+            return semantic_score * 0.85
 
     def _keyword_match_score(
         self,
@@ -228,30 +229,43 @@ class OptimizedAudioSearcher(AudioSearcher):
         filename_lower = filename.lower()
         filename_base = os.path.splitext(filename_lower)[0]
 
-        if query_lower in filename_base:
+        # 完全匹配：查询词与文件名完全一致
+        if query_lower == filename_base:
             scores.append(1.0)
             match_level = "exact"
+        elif query_lower in filename_base:
+            # 查询词是文件名的子串
+            scores.append(0.95)
+            if match_level != "exact":
+                match_level = "exact"
 
         # 文件名包含查询词的大部分（支持中英文）
         if len(query_tokens) > 1:
             matching_tokens = sum(1 for t in query_tokens if t in filename_base)
+            match_ratio = matching_tokens / len(query_tokens)
             if matching_tokens == len(query_tokens):
-                scores.append(0.95)
+                # 所有词都匹配
+                scores.append(0.92)
                 if match_level != "exact":
                     match_level = "exact"
-            elif matching_tokens >= len(query_tokens) * 0.7:
-                scores.append(0.85)
+            elif match_ratio >= 0.7:
+                # 70%以上词匹配
+                scores.append(0.85 + match_ratio * 0.05)
                 if match_level == "none":
                     match_level = "partial"
-            elif matching_tokens > 0:
-                scores.append(0.7 * (matching_tokens / len(query_tokens)))
+            elif match_ratio > 0:
+                # 部分词匹配
+                scores.append(0.6 + match_ratio * 0.2)
                 if match_level == "none":
                     match_level = "weak"
         elif len(query_tokens) == 1:
             # 单 token 匹配
             token = query_tokens[0]
-            if token in filename_base:
-                scores.append(0.9)
+            if token == filename_base:
+                scores.append(1.0)
+                match_level = "exact"
+            elif token in filename_base:
+                scores.append(0.88)
                 if match_level != "exact":
                     match_level = "partial"
 
@@ -299,22 +313,40 @@ class OptimizedAudioSearcher(AudioSearcher):
         self,
         filters: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
-        """获取所有文件用于关键词搜索"""
+        """获取所有文件用于关键词搜索（支持大数据集）"""
         try:
-            results = self.collection.get(
-                limit=10000,  # 增加限制以支持更多文件
-                where=filters if filters else None
-            )
-
-            if not results or not results.get("ids"):
-                return []
-
-            files = []
-            for i, file_id in enumerate(results["ids"]):
-                metadata = results["metadatas"][i]
-                files.append(metadata)
-
-            return files
+            all_files = []
+            offset = 0
+            batch_size = 10000
+            
+            while True:
+                results = self.collection.get(
+                    limit=batch_size,
+                    offset=offset,
+                    where=filters if filters else None
+                )
+                
+                if not results or not results.get("ids"):
+                    break
+                
+                for i, file_id in enumerate(results["ids"]):
+                    metadata = results["metadatas"][i]
+                    all_files.append(metadata)
+                
+                # 如果获取的数量小于批次大小，说明已经获取完所有数据
+                if len(results["ids"]) < batch_size:
+                    break
+                
+                offset += batch_size
+                
+                # 安全限制：最多获取100万个文件
+                if offset > 1000000:
+                    logger.warning(f"文件数量超过100万，停止获取更多文件")
+                    break
+            
+            logger.info(f"获取文件列表完成: {len(all_files)} 个文件")
+            return all_files
+            
         except Exception as e:
             logger.warning(f"获取文件列表失败: {e}")
             return []
@@ -404,9 +436,8 @@ class OptimizedAudioSearcher(AudioSearcher):
             # 对于英文单词等没有扩展的查询，也需要搜索原始查询
             is_original = expanded_query.lower() == query.lower()
             
-            # 如果有扩展词，跳过原始查询；如果没有扩展词，使用原始查询
-            if is_original and len(expanded_queries) > 1:
-                continue  # 跳过原始查询，避免与第1层重复
+            # 不再跳过原始查询，确保原始查询的精确匹配结果被包含
+            # 即使与第1层有重复，后续会去重并保留最高分数
 
             for metadata in all_files:
                 file_path = metadata.get("file_path", "")
@@ -729,35 +760,72 @@ class OptimizedAudioSearcher(AudioSearcher):
             await progress_callback("loading_model", 0.2)
 
         embedder = get_embedder()
-        if embedder is None:
-            logger.warning("Embedder 不可用，无法执行语义搜索")
-            return [], stats
-
+        
         # 步骤 3: 获取查询扩展
         expanded_queries = self._text_processor.expand_query(query)
         if len(expanded_queries) > 1:
             stats["query_expansion"] = True
             stats["expanded_queries"] = expanded_queries
 
-        # 步骤 4: 生成 embedding 并执行三层混合搜索
-        if progress_callback:
-            await progress_callback("generating_embedding", 0.3)
-
         all_results = []
 
-        # 对每个扩展查询执行语义搜索
+        # 步骤 4: 执行搜索
+        # 先执行不依赖 embedder 的关键词搜索（第1层和第2层）
+        if progress_callback:
+            await progress_callback("keyword_searching", 0.3)
+        
+        # 第1层：精确关键词搜索
+        exact_results = self._exact_keyword_search(query, filters)
+        all_results.extend(exact_results)
+        stats["layers"]["exact"] = len(exact_results)
+        logger.debug(f"第1层(精确关键词): 找到 {len(exact_results)} 个结果")
+        
+        # 第2层：分词扩展搜索
+        expanded_results = self._expanded_keyword_search(query, filters)
+        all_results.extend(expanded_results)
+        stats["layers"]["expanded"] = len(expanded_results)
+        logger.debug(f"第2层(分词扩展): 找到 {len(expanded_results)} 个结果")
+        
+        # 如果 embedder 不可用，只返回关键词搜索结果
+        if embedder is None:
+            logger.warning("Embedder 不可用，仅使用关键词搜索")
+            
+            # 合并去重并排序
+            seen_paths = {}
+            for r in all_results:
+                if r.file_path not in seen_paths or r.similarity > seen_paths[r.file_path].similarity:
+                    seen_paths[r.file_path] = r
+            
+            unique_results = sorted(
+                seen_paths.values(),
+                key=lambda x: x.similarity,
+                reverse=True
+            )
+            final_results = unique_results[:top_k]
+            
+            stats["duration"] = time.time() - start_time
+            stats["total_found"] = len(unique_results)
+            stats["returned"] = len(final_results)
+            stats["embedder_available"] = False
+            
+            return final_results, stats
+        
+        # 步骤 5: 执行语义搜索（第3层，需要 embedder）
+        if progress_callback:
+            await progress_callback("generating_embedding", 0.5)
+
         for i, q in enumerate(expanded_queries):
             try:
                 query_embedding = embedder.text_to_embedding(q)
 
                 if progress_callback:
-                    progress = 0.3 + (i * 0.4 / len(expanded_queries))
-                    await progress_callback(f"searching_{i+1}", progress)
+                    progress = 0.5 + (i * 0.3 / len(expanded_queries))
+                    await progress_callback(f"semantic_searching_{i+1}", progress)
 
-                # 使用三层混合搜索
-                results = self._hybrid_search(
-                    query=q,
+                # 第3层：语义搜索
+                results = self._semantic_search(
                     query_embedding=query_embedding,
+                    query=q,
                     top_k=top_k,
                     min_similarity=min_similarity,
                     filters=filters
@@ -782,9 +850,9 @@ class OptimizedAudioSearcher(AudioSearcher):
             except Exception as e:
                 logger.warning(f"查询 '{q}' 失败: {e}")
 
-        # 步骤 5: 合并去重和排序
+        # 步骤 6: 合并去重和排序
         if progress_callback:
-            await progress_callback("ranking_results", 0.8)
+            await progress_callback("ranking_results", 0.85)
 
         # 合并所有结果并去重
         seen_paths = {}
@@ -800,9 +868,9 @@ class OptimizedAudioSearcher(AudioSearcher):
         )
         final_results = unique_results[:top_k]
 
-        # 步骤 6: 缓存结果
+        # 步骤 7: 缓存结果
         if progress_callback:
-            await progress_callback("caching", 0.9)
+            await progress_callback("caching", 0.95)
 
         if use_cache and final_results:
             await self._query_cache.set(
@@ -898,13 +966,31 @@ class OptimizedAudioSearcher(AudioSearcher):
 
 # 全局优化的搜索器实例
 _optimized_searcher: Optional[OptimizedAudioSearcher] = None
+_searcher_lock = asyncio.Lock()
 
 
-def get_optimized_searcher(
+async def get_optimized_searcher(
     persist_directory: Optional[str] = None,
     collection_name: str = "audio_embeddings"
 ) -> OptimizedAudioSearcher:
-    """获取优化的搜索器单例"""
+    """获取优化的搜索器单例（线程安全）"""
+    global _optimized_searcher
+    if _optimized_searcher is None:
+        async with _searcher_lock:
+            # 双重检查锁定模式
+            if _optimized_searcher is None:
+                _optimized_searcher = OptimizedAudioSearcher(
+                    persist_directory=persist_directory,
+                    collection_name=collection_name
+                )
+    return _optimized_searcher
+
+
+def get_optimized_searcher_sync(
+    persist_directory: Optional[str] = None,
+    collection_name: str = "audio_embeddings"
+) -> OptimizedAudioSearcher:
+    """获取优化的搜索器单例（同步版本，用于非异步上下文）"""
     global _optimized_searcher
     if _optimized_searcher is None:
         _optimized_searcher = OptimizedAudioSearcher(

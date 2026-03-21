@@ -1072,9 +1072,9 @@ async def search_audio(request: schemas.SearchRequest):
     - **threshold**: 相似度阈值（默认 0.15）
     """
     try:
-        from core.search_engine import get_optimized_searcher
+        from core.search_engine import get_optimized_searcher_sync
 
-        searcher = get_optimized_searcher()
+        searcher = get_optimized_searcher_sync()
 
         filters = {}
         if request.min_duration is not None:
@@ -1204,10 +1204,10 @@ async def _search_task(
     """
     后台搜索任务（带 WebSocket 进度推送）
     """
-    from core.search_engine import get_optimized_searcher
+    from core.search_engine import get_optimized_searcher_sync
 
     ws_manager = get_ws_manager()
-    searcher = get_optimized_searcher()
+    searcher = get_optimized_searcher_sync()
 
     # 构建过滤条件
     where_clause = {}
@@ -1295,8 +1295,8 @@ async def get_search_cache_stats():
     获取搜索缓存统计信息
     """
     try:
-        from core.search_engine import get_optimized_searcher
-        searcher = get_optimized_searcher()
+        from core.search_engine import get_optimized_searcher_sync
+        searcher = get_optimized_searcher_sync()
         stats = searcher.get_cache_stats()
         return {
             "status": "success",
@@ -1313,8 +1313,8 @@ async def clear_search_cache():
     清空搜索缓存
     """
     try:
-        from core.search_engine import get_optimized_searcher
-        searcher = get_optimized_searcher()
+        from core.search_engine import get_optimized_searcher_sync
+        searcher = get_optimized_searcher_sync()
         await searcher.clear_cache()
         return {
             "status": "success",
@@ -1700,8 +1700,8 @@ async def get_audio(file_path: str = PathParam(..., description="音频文件路
 async def get_index_status():
     """获取当前索引状态"""
     try:
-        from core.search_engine import get_optimized_searcher
-        searcher = get_optimized_searcher()
+        from core.search_engine import get_optimized_searcher_sync
+        searcher = get_optimized_searcher_sync()
         stats = searcher.get_collection_stats()
 
         return schemas.IndexStatus(
@@ -1719,8 +1719,8 @@ async def get_index_status():
 async def get_indexed_files():
     """获取所有已索引的文件列表"""
     try:
-        from core.search_engine import get_optimized_searcher
-        searcher = get_optimized_searcher()
+        from core.search_engine import get_optimized_searcher_sync
+        searcher = get_optimized_searcher_sync()
         files = searcher.get_all_indexed_files()
 
         audio_files = []
@@ -2366,18 +2366,23 @@ async def delete_project(project_id: str):
         if is_current_project:
             logger.info(f"删除的是当前工程 {project_id}，清理缓存并切换到默认工程")
 
+            # 先切换到默认工程
+            config.CURRENT_PROJECT_ID = 'default'
+            logger.info("已切换到默认工程")
+
             # 清理音频缓存
             from core.audio_cache import reset_audio_cache
             reset_audio_cache()
 
-            # 清理查询缓存
-            from core.search_engine import get_optimized_searcher
-            searcher = get_optimized_searcher()
-            asyncio.create_task(searcher.clear_cache())
+            # 重置 Searcher
+            from core.search_engine import reset_optimized_searcher
+            reset_optimized_searcher()
+            logger.info("Searcher 已重置")
 
-            # 切换到默认工程
-            config.CURRENT_PROJECT_ID = 'default'
-            logger.info("已切换到默认工程")
+            # 重置 ChromaDB 客户端
+            from core.indexer import reset_chroma_client
+            reset_chroma_client()
+            logger.info("ChromaDB 客户端已重置")
 
         return {
             "success": True,
@@ -2402,35 +2407,33 @@ async def switch_project(project_id: str):
         # 获取当前工程ID（用于判断是否真的切换了）
         old_project_id = getattr(config, 'CURRENT_PROJECT_ID', None)
 
-        # 如果确实切换了工程，清理旧工程的缓存和连接
+        # 如果确实切换了工程，先更新当前工程ID，然后清理缓存
         if old_project_id and old_project_id != project_id:
-            logger.info(f"切换工程: {old_project_id} -> {project_id}，清理缓存")
+            logger.info(f"切换工程: {old_project_id} -> {project_id}，开始清理缓存")
+
+            # 先更新当前工程ID（确保后续创建的 searcher 使用正确的路径）
+            config.CURRENT_PROJECT_ID = project_id
+            logger.info(f"当前工程ID已更新为: {project_id}")
 
             # 清理音频缓存
             from core.audio_cache import reset_audio_cache
             reset_audio_cache()
             logger.info("音频缓存已清理")
 
-            # 清理查询缓存
-            from core.search_engine import get_optimized_searcher
-            searcher = get_optimized_searcher()
-            asyncio.create_task(searcher.clear_cache())
-            logger.info("查询缓存已清理")
-
-            # 重置数据库连接
-            from core.database import reset_db_manager
-            reset_db_manager()
-            logger.info("数据库连接已重置")
+            # 重置 Searcher（强制使用新工程的 ChromaDB）- 必须在重置 ChromaDB 客户端之前
+            from core.search_engine import reset_optimized_searcher
+            reset_optimized_searcher()
+            logger.info("Searcher 已重置")
 
             # 重置 ChromaDB 客户端（避免跨工程缓存问题）
             from core.indexer import reset_chroma_client
             reset_chroma_client()
             logger.info("ChromaDB 客户端已重置")
 
-            # 重置 Searcher（强制使用新工程的 ChromaDB）
-            from core.search_engine import reset_optimized_searcher
-            reset_optimized_searcher()
-            logger.info("Searcher 已重置")
+            # 重置数据库连接
+            from core.database import reset_db_manager
+            reset_db_manager()
+            logger.info("数据库连接已重置")
 
         # 获取数据库管理器（可能是新的连接）
         db_manager = get_db_manager()

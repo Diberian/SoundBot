@@ -392,6 +392,11 @@ function setupIpcHandlers() {
               page_size: data.page_size || 50
             })
           });
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`[Backend API] Search failed: ${response.status} ${errorText}`);
+            return { success: false, error: `HTTP ${response.status}: ${errorText}` };
+          }
           return await response.json();
         }
 
