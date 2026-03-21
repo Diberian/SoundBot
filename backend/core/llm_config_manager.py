@@ -33,13 +33,14 @@ class LLMProvider:
     AZURE = "azure"
     GEMINI = "gemini"
     KIMI = "kimi"
+    KIMI_CODING = "kimi_coding"
     ANTHROPIC = "anthropic"
     DEEPSEEK = "deepseek"
     SILICONFLOW = "siliconflow"
     # 自定义
     CUSTOM = "custom"
 
-    ALL = [LM_STUDIO, OLLAMA, OPENAI, AZURE, GEMINI, KIMI, ANTHROPIC, DEEPSEEK, SILICONFLOW, CUSTOM]
+    ALL = [LM_STUDIO, OLLAMA, OPENAI, AZURE, GEMINI, KIMI, KIMI_CODING, ANTHROPIC, DEEPSEEK, SILICONFLOW, CUSTOM]
 
 
 # LLM 提供者元数据（显示名称、默认端点、API 版本等）
@@ -102,6 +103,16 @@ LLM_PROVIDER_META: Dict[str, Dict[str, Any]] = {
         "auth_type": "bearer",
         "default_model": "moonshot-v1-8k",
         "description": "使用 Kimi (Moonshot) AI 模型",
+        "supports_streaming": True,
+    },
+    "kimi_coding": {
+        "name": "Kimi Coding",
+        "icon": "code-2",
+        "default_url": "https://api.kimi.com/coding",
+        "need_api_key": True,
+        "auth_type": "kimi_claw",
+        "default_model": "k2p5",
+        "description": "使用 Kimi Coding 专用 API（Anthropic 格式）",
         "supports_streaming": True,
     },
     "anthropic": {
@@ -211,6 +222,15 @@ DEFAULT_CONFIG = {
             "base_url": "https://api.moonshot.cn/v1",
             "api_key": "",
             "model": "moonshot-v1-8k",
+        },
+        "kimi_coding": {
+            "base_url": "https://api.kimi.com/coding",
+            "api_key": "",
+            "model": "k2p5",
+            "headers": {
+                "User-Agent": "Kimi Claw Plugin",
+                "X-Kimi-Claw-ID": ""
+            }
         },
         "anthropic": {
             "base_url": "https://api.anthropic.com/v1",

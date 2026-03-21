@@ -52,7 +52,8 @@ function createWindow() {
           "connect-src 'self' http://127.0.0.1:8000 ws://127.0.0.1:8000 " +
           "https://api.openai.com https://api.moonshot.cn https://api.anthropic.com " +
           "https://api.deepseek.com https://api.siliconflow.cn " +
-          "https://generativelanguage.googleapis.com https://*.openai.azure.com;"
+          "https://generativelanguage.googleapis.com https://*.openai.azure.com " +
+          "https://api.kimi.com;"
         ]
       }
     });
