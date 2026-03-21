@@ -1,6 +1,6 @@
 {
   "name": "soundbot-electron",
-  "version": "1.0.0",
+  "version": "0.1.0-alpha",
   "description": "SoundBot - AI 音效管理器桌面版",
   "main": "main.js",
   "scripts": {
@@ -9,9 +9,9 @@
     "build": "electron-builder",
     "pack": "electron-builder --dir"
   },
-  "keywords": ["electron", "audio", "sound", "manager"],
-  "author": "SoundBot Team",
-  "license": "MIT",
+  "keywords": ["electron", "audio", "sound", "manager", "ai", "semantic-search", "clap"],
+  "author": "Nagisa_Huckrick (胡杨) <Nagisa_Huckrick@yeah.net>",
+  "license": "GPL-3.0",
   "devDependencies": {
     "electron": "^28.0.0",
     "electron-builder": "^24.0.0"

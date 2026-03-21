@@ -1,0 +1,80 @@
+GNU GENERAL PUBLIC LICENSE
+Version 3, 29 June 2007
+
+Copyright (C) 2026 Nagisa_Huckrick (胡杨)
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+==============================================================================
+
+SoundBot - AI 音效管理器
+Copyright (C) 2026 Nagisa_Huckrick (胡杨)
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+==============================================================================
+
+Additional permissions and notices:
+
+1. Third-party components:
+   This software includes or depends on the following third-party components,
+   each with their own licenses:
+   
+   - CLAP Model (laion/larger_clap_general): MIT License
+     https://huggingface.co/laion/larger_clap_general
+   
+   - ChromaDB: Apache License 2.0
+     https://github.com/chroma-core/chroma
+   
+   - Electron: MIT License
+     https://github.com/electron/electron
+   
+   - FastAPI: MIT License
+     https://github.com/tiangolo/fastapi
+   
+   - WaveSurfer.js: BSD-3-Clause License
+     https://github.com/katspaugh/wavesurfer.js
+   
+   - Tailwind CSS: MIT License
+     https://github.com/tailwindlabs/tailwindcss
+
+2. Attribution:
+   When redistributing this software or creating derivative works,
+   you must provide appropriate attribution to the original authors
+   and include a copy of this license.
+
+3. Commercial Use:
+   This software may be used for commercial purposes under the terms
+   of the GPL-3.0 license. However, any derivative works must also
+   be licensed under GPL-3.0 and made available as open source.
+
+For the full text of the GNU General Public License Version 3,
+please visit: https://www.gnu.org/licenses/gpl-3.0.html
+
+==============================================================================
+
+Contact:
+For questions about licensing, please open an issue on our GitHub repository
+or contact the SoundBot Team.

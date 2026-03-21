@@ -1,41 +1,116 @@
-# SoundBot - AI 音效管理器桌面版
+# 🎵 SoundBot - AI 音效管理器
 
-这是一个基于 Electron 的音效管理器桌面应用，将您的网页版音效管理器转换为原生桌面应用。
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Version](https://img.shields.io/badge/version-0.1.0--alpha-orange.svg)](https://github.com/yourusername/soundbot)
+[![Python](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/)
+[![Electron](https://img.shields.io/badge/electron-28.x-9feaf9.svg)](https://www.electronjs.org/)
 
-## 项目结构
+> 用自然语言找到你想要的任何声音 - AI 驱动的智能音效管理器桌面版
+
+![SoundBot Preview](https://via.placeholder.com/800x450/0a0a0a/22c55e?text=SoundBot+AI+Audio+Manager)
+
+---
+
+## ✨ 核心特性
+
+### 🤖 AI 自然语言搜索
+- **描述即搜索** - 用自然语言描述音效（如"很闷的撞击声"、"下雨天在窗户边的雨声"）
+- **智能关键词提取** - AI 自动分析需求并提取搜索关键词
+- **流式响应** - 实时看到 AI 思考和搜索结果
+
+### 🔍 语义向量搜索
+- **CLAP 音频-文本对齐模型** - 基于 LAION 的对比学习预训练模型
+- **ChromaDB 向量数据库** - 高效的相似度检索，支持大规模音效库
+- **增量索引** - 只处理新文件，快速更新音效库
+
+### 🎛️ 多 LLM 支持
+| 提供商 | 状态 | 说明 |
+|--------|------|------|
+| LM Studio | ✅ | 本地部署，隐私优先 |
+| Ollama | ✅ | 开源模型，离线使用 |
+| OpenAI | ✅ | GPT-4o-mini 等 |
+| Claude | ✅ | Anthropic API |
+| DeepSeek | ✅ | 国产大模型 |
+| Kimi | ✅ | Moonshot API |
+| Gemini | ✅ | Google AI |
+
+### 🎨 现代化界面
+- **深色/浅色主题** - 一键切换，护眼设计
+- **波形可视化** - WaveSurfer.js 实时音频波形
+- **多工程管理** - 项目隔离，数据安全
+- **国际化支持** - 中英文界面切换
+
+---
+
+## 🏗️ 项目架构
 
 ```
 SoundBot/
-├── package.json          # Electron 项目配置
-├── main.js               # Electron 主进程
-├── preload.js            # 安全桥接脚本
-├── index.html            # 主界面文件
-├── assets/               # 静态资源目录
-│   └── style.css         # 补充样式文件
-├── README.md             # 项目说明
-└── test-app.js           # 测试应用（可选）
+├── 📦 Electron 前端
+│   ├── main.js              # 主进程
+│   ├── preload.js           # 安全桥接脚本
+│   ├── index.html           # 主界面
+│   ├── assets/              # 静态资源
+│   └── package.json         # 前端依赖
+│
+├── 🐍 Python 后端
+│   ├── main.py              # FastAPI 入口
+│   ├── config.py            # 配置管理
+│   ├── core/                # 核心模块
+│   │   ├── ai_chat_service.py   # AI 对话服务
+│   │   ├── llm_client.py        # 统一 LLM 客户端
+│   │   ├── embedder.py          # CLAP 嵌入模型
+│   │   ├── indexer.py           # ChromaDB 索引
+│   │   ├── searcher.py          # 语义搜索
+│   │   ├── scanner.py           # 音频扫描
+│   │   └── ...
+│   ├── models/              # 数据模型
+│   ├── utils/               # 工具函数
+│   └── requirements.txt     # Python 依赖
+│
+└── ⚙️ 配置
+    ├── config/
+    │   ├── ai_config.json     # AI 配置
+    │   └── user_config.json   # 用户配置
+    └── db/                    # 数据库目录
 ```
 
-## 功能特性
+---
 
-- ✅ **原生桌面体验** - 窗口化应用，支持最小化、最大化、关闭
-- ✅ **深色主题支持** - 完美匹配原网页的深色主题
-- ✅ **开发者工具** - F12 快捷键打开开发者工具
-- ✅ **安全架构** - 使用预加载脚本安全地暴露 API
-- ✅ **菜单栏集成** - 完整的文件、编辑、视图菜单
-- ✅ **窗口控制** - 支持窗口最小化、最大化、关闭操作
-- ✅ **文件操作 API** - 安全的文件读写接口
-- ✅ **系统集成** - 通知、对话框、快捷键支持
+## 🚀 快速开始
 
-## 安装和运行
+### 环境要求
 
-### 1. 安装依赖
+| 组件 | 最低要求 | 推荐配置 |
+|------|----------|----------|
+| **操作系统** | macOS 10.15 / Win 10 / Ubuntu 20.04 | 最新版本 |
+| **内存** | 8 GB | 16 GB+ |
+| **存储** | 2 GB 可用空间 | SSD 推荐 |
+| **Python** | 3.10 | 3.12 |
+| **Node.js** | 18.x | 20.x |
+
+### 1. 克隆仓库
+
+```bash
+git clone https://github.com/yourusername/soundbot.git
+cd soundbot
+```
+
+### 2. 安装前端依赖
 
 ```bash
 npm install
 ```
 
-### 2. 运行应用
+### 3. 安装后端依赖
+
+```bash
+cd backend
+pip install -r requirements.txt
+cd ..
+```
+
+### 4. 启动应用
 
 **开发模式（带开发者工具）:**
 ```bash
@@ -47,131 +122,87 @@ npm run dev
 npm start
 ```
 
-### 3. 构建应用
+---
+
+## 📖 使用指南
+
+### 1. 配置 AI（可选）
+
+点击 **设置 → AI 设置**，配置您的 LLM：
+
+- **本地部署**：LM Studio (`http://localhost:1234/v1`)
+- **Ollama**：`http://localhost:11434/v1`
+- **云端 API**：OpenAI、Claude、Kimi 等
+
+### 2. 导入音效
+
+- 点击 **导入 → 导入文件夹** 扫描整个音效库
+- 支持格式：WAV, MP3, FLAC, AIFF, OGG, M4A, AAC
+- 首次索引可能需要几分钟（取决于音效库大小）
+
+### 3. 开始搜索
+
+在右侧 AI 助手面板输入：
+> "找一个恐怖游戏里突然吓人的音效"
+
+或直接在搜索框输入关键词进行语义搜索。
+
+---
+
+## 🛠️ 开发指南
+
+### 项目结构详解
+
+#### 前端 (Electron)
+- `main.js` - 主进程，管理窗口生命周期、后端启动
+- `preload.js` - 预加载脚本，安全暴露 API 给渲染进程
+- `index.html` - 主界面，包含所有 UI 组件
+
+#### 后端 (FastAPI)
+- `main.py` - API 入口，定义所有端点
+- `core/ai_chat_service.py` - AI 对话逻辑，处理自然语言查询
+- `core/llm_client.py` - 统一 LLM 客户端，支持多 Provider
+- `core/embedder.py` - CLAP 模型封装，音频/文本嵌入
+- `core/indexer.py` - ChromaDB 索引管理
+- `core/searcher.py` - 语义搜索实现
+
+### 快捷键
+
+| 快捷键 | 功能 |
+|--------|------|
+| `F12` | 打开/关闭开发者工具 |
+| `Cmd/Ctrl + N` | 新建工程 |
+| `Cmd/Ctrl + O` | 导入文件 |
+| `Cmd/Ctrl + Q` | 退出应用 |
+
+### 调试
 
 ```bash
-npm run build
+# 启用详细日志
+DEBUG=* npm run dev
+
+# 后端调试
+DEBUG=true python backend/main.py
 ```
 
-## 快捷键
+---
 
-- `F12` - 打开/关闭开发者工具
-- `Cmd/Ctrl + N` - 新建项目
-- `Cmd/Ctrl + O` - 导入文件
-- `Cmd/Ctrl + Q` - 退出应用
-
-## 安全架构
-
-应用采用 Electron 推荐的安全最佳实践：
-
-- **禁用 Node.js 集成** - 防止渲染进程直接访问 Node.js API
-- **启用上下文隔离** - 隔离渲染进程和主进程
-- **预加载脚本** - 安全地暴露必要的 API 给前端
-- **Web 安全** - 启用 CSP 和内容安全策略
-
-## API 接口
-
-### 窗口控制
-```javascript
-window.electronAPI.windowControl.minimize();
-window.electronAPI.windowControl.maximize();
-window.electronAPI.windowControl.close();
-```
-
-### 文件操作
-```javascript
-window.electronAPI.fileOperation.openFile(options);
-window.electronAPI.fileOperation.saveFile(data, options);
-```
-
-### 应用设置
-```javascript
-window.electronAPI.appSettings.set('theme', 'dark');
-window.electronAPI.appSettings.get('theme');
-```
-
-### 系统信息
-```javascript
-console.log(window.electronAPI.systemInfo.platform);
-console.log(window.electronAPI.systemInfo.version);
-```
-
-## 故障排除
-
-### 常见问题
-
-1. **应用无法启动（SIGTRAP 错误）**
-   - 确保 Electron 版本与系统兼容
-   - 检查是否有安全软件阻止应用运行
-   - 尝试重新安装依赖：`rm -rf node_modules && npm install`
-
-2. **开发者工具无法打开**
-   - 确保使用 `npm run dev` 启动开发模式
-   - 检查 F12 快捷键是否被其他应用占用
-
-3. **文件操作权限问题**
-   - 确保应用有适当的文件系统权限
-   - 检查文件路径是否正确
-
-### 开发调试
-
-1. **启用详细日志**
-   ```bash
-   DEBUG=* npm run dev
-   ```
-
-2. **检查预加载脚本**
-   - 在开发者工具中检查 `window.electronAPI` 是否可用
-   - 验证 API 接口是否正确暴露
-
-3. **主进程调试**
-   - 使用 `--inspect` 参数调试主进程
-   - 检查控制台输出是否有错误信息
-
-## 自定义配置
-
-### 修改窗口大小
-在 `main.js` 中修改 BrowserWindow 配置：
-
-```javascript
-const mainWindow = new BrowserWindow({
-  width: 1280,    // 宽度
-  height: 800,    // 高度
-  minWidth: 1280, // 最小宽度
-  minHeight: 800  // 最小高度
-});
-```
-
-### 添加新的 API 接口
-在 `preload.js` 中添加新的 API：
-
-```javascript
-contextBridge.exposeInMainWorld('electronAPI', {
-  // 现有 API...
-  
-  // 新 API
-  myNewFeature: {
-    doSomething: () => ipcRenderer.invoke('my-feature', 'do-something')
-  }
-});
-```
-
-然后在 `main.js` 中添加对应的 IPC 处理程序。
-
-## 构建和分发
+## 📦 构建分发
 
 ### 构建应用
+
 ```bash
 npm run build
 ```
 
-### 支持的平台
+构建输出将在 `dist/` 目录：
 - **macOS** - `.dmg` 安装包
 - **Windows** - `.exe` 安装程序
 - **Linux** - `.AppImage` 应用镜像
 
-### 构建配置
-在 `package.json` 的 `build` 字段中配置构建选项：
+### 配置构建选项
+
+在 `package.json` 的 `build` 字段中修改：
 
 ```json
 {
@@ -185,107 +216,92 @@ npm run build
 }
 ```
 
-## 技术栈
+---
 
-- **Electron** - 桌面应用框架
-- **HTML/CSS/JavaScript** - 前端技术
-- **Tailwind CSS** - 样式框架
-- **Lucide Icons** - 图标库
-- **FastAPI** - 后端 API 框架
-- **CLAP** - 音频-文本嵌入模型
-- **UCS** - Universal Category System 音效分类系统
+## 🧪 技术栈
 
-## UCS 音效分类支持
+### 前端
+- **Electron** - 跨平台桌面框架
+- **Tailwind CSS** - 原子化 CSS 框架
+- **Lucide Icons** - 现代化图标库
+- **WaveSurfer.js** - 音频波形可视化
 
-本项目集成 UCS (Universal Category System) 通用音效分类系统，大幅提升中文搜索准确性。
+### 后端
+- **FastAPI** - 高性能 Python Web 框架
+- **ChromaDB** - 向量数据库
+- **Transformers** - HuggingFace 模型库
+- **CLAP** - 音频-文本对比学习模型
 
-### 数据来源
+### AI/ML
+- **CLAP (LAION)** - 音频-文本嵌入模型
+- **OpenAI API** - GPT 系列模型
+- **多种 LLM Provider** - 支持主流大模型 API
 
-**UCS 音效分类中英文对照表** 来自 Bilibili 用户分享：
-- 来源链接：https://www.bilibili.com/read/cv23153650/
-- 表格文件：`UCS+音效分类中英文对照表.xlsx`
+---
 
-### 功能特性
+## 📄 许可证
 
-- **569 个中文关键词映射** - 覆盖常见音效分类
-- **智能查询扩展** - 中文搜索自动扩展为英文同义词
-- **惰性加载** - 首次搜索时加载，不影响启动速度
-- **三级匹配策略** - 子类关键词 → 同义词映射 → UCS 关键词
+**GPL-3.0** - 详见 [LICENSE](LICENSE) 文件
 
-### 使用示例
+使用本软件即表示您同意 GPL-3.0 许可证条款。任何衍生作品必须同样以 GPL-3.0 开源。
 
-搜索中文关键词时，系统会自动匹配 UCS 分类：
+### 第三方组件许可
 
-| 中文搜索 | 扩展的英文关键词 | 搜索结果 |
-|---------|----------------|---------|
-| 石头 | stone, rock, pebble | 岩石、砾石、砖块撞击音效 |
-| 风声 | wind, breeze, gust | 风声、空气流动音效 |
-| 爆炸 | explosion, blast, boom | 爆炸、冲击波音效 |
-| 门铃 | bell, ring, chime | 门铃、提示音音效 |
+本项目使用了以下第三方组件：
 
-### 自定义关键词
+| 组件 | 许可证 |
+|------|--------|
+| CLAP Model | MIT |
+| ChromaDB | Apache-2.0 |
+| Electron | MIT |
+| FastAPI | MIT |
+| WaveSurfer.js | BSD-3-Clause |
+| Tailwind CSS | MIT |
 
-如需添加新的中文同义词映射，编辑 `backend/core/ucs_keywords.py`：
+---
 
-```python
-# 常见中文同义词映射（补充 UCS 表中没有的）
-CHINESE_SYNONYMS = {
-    "石头": [("岩石", 1.0)],
-    "风声": [("风", 1.0)],
-    # 添加你的映射...
-    "你的词": [("UCS分类", 权重)],
-}
-```
+## 🤖 AI 工具致谢
 
-### 性能指标
+本项目开发过程中使用了以下 AI 编程助手：
 
-- 关键词映射数量：569 个
-- Excel 加载时间：~0.25 秒
-- 查询扩展时间：~0.01 毫秒
-- 内存占用：约 1-2 MB
+- **[Trae](https://www.trae.ai/)** - 主要开发环境，代码生成与重构
+- **[Cursor](https://cursor.sh/)** - 代码编辑与调试辅助
 
-## 模型引用 / Model Citation
+> 这是一个完全由 AI 辅助开发的个人项目，展示了现代 AI 工具在软件开发中的强大能力。
 
-本项目使用 LAION 的 CLAP 模型进行音频语义理解：
+---
 
-**模型**: `laion/larger_clap_general`
+## 🤝 贡献指南
 
-**论文**: Wu, Y., Chen, K., Zhang, T., Hui, Y., Berg-Kirkpatrick, T., & Dubnov, S. (2022). Large-scale Contrastive Language-Audio Pretraining with Feature Fusion and Keyword-to-Caption Augmentation. arXiv preprint arXiv:2211.06687.
+欢迎提交 Issue 和 PR！
 
-**BibTeX**:
-```bibtex
-@misc{wu2022large,
-  doi = {10.48550/ARXIV.2211.06687},
-  url = {https://arxiv.org/abs/2211.06687},
-  author = {Wu, Yusong and Chen, Ke and Zhang, Tianyu and Hui, Yuchen and Berg-Kirkpatrick, Taylor and Dubnov, Shlomo},
-  title = {Large-scale Contrastive Language-Audio Pretraining with Feature Fusion and Keyword-to-Caption Augmentation},
-  publisher = {arXiv},
-  year = {2022}
-}
-```
+1. Fork 本仓库
+2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
+4. 推送到分支 (`git push origin feature/AmazingFeature`)
+5. 创建 Pull Request
 
-**HuggingFace**: https://huggingface.co/laion/larger_clap_general
+---
 
-**许可证 / License**: 
-- 模型基于 MIT License 开源，允许商业使用
-- 遵循 LAION 的使用条款，请确保合法合规使用
-- 详见: https://huggingface.co/laion/larger_clap_general
+## 🙏 致谢
 
-## 许可证
+- [LAION CLAP](https://huggingface.co/laion/larger_clap_general) - 音频-文本嵌入模型
+- [ChromaDB](https://www.trychroma.com/) - 向量数据库
+- [WaveSurfer.js](https://wavesurfer-js.org/) - 音频波形可视化
+- [Electron](https://www.electronjs.org/) - 跨平台桌面框架
+- [FastAPI](https://fastapi.tiangolo.com/) - 高性能 Python Web 框架
+- [UCS](https://universalcategorysystem.com/) - Universal Category System 音效分类系统
 
-本项目采用 MIT License 开源许可证
+---
 
-### 第三方组件许可证
+## 📞 联系我们
 
-| 组件 | 许可证 | 说明 |
-|------|--------|------|
-| CLAP Model (laion/larger_clap_general) | MIT | 音频-文本嵌入模型 |
-| Electron | MIT | 桌面应用框架 |
-| FastAPI | MIT | 后端 API 框架 |
-| Transformers | Apache 2.0 | HuggingFace 模型库 |
-| ChromaDB | Apache 2.0 | 向量数据库 |
+- **GitHub Issues**: [提交问题](https://github.com/yourusername/soundbot/issues)
+- **Email**: your-email@example.com
 
-**免责声明**: 
-- 本软件仅供学习和研究使用
-- 使用 CLAP 模型时请遵守 LAION 的使用条款
-- 用户需自行承担使用本软件的风险和责任
+---
+
+<p align="center">
+  Made with ❤️ by <a href="https://github.com/Nagisa_Huckrick">Nagisa_Huckrick (胡杨)</a><br>
+  <strong>GPL-3.0 Licensed</strong>
+</p>
