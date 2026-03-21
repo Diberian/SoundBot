@@ -222,6 +222,26 @@ const i18n = {
             // 空状态
             'empty.import.audio': '请导入音频文件',
             'empty.folder.create': '暂无文件夹，点击上方按钮创建',
+            
+            // 波形
+            'waveform.empty.state': '请导入或选择一个音频文件',
+            
+            // 模型状态
+            'model.loading': '模型加载中...',
+            'model.ready': '模型就绪',
+            'model.error': '模型错误',
+            'model.status.adjust.threshold': '点击调整搜索相似度阈值',
+            
+            // 阈值设置
+            'threshold.title': '搜索相似度阈值',
+            'threshold.loose': '宽松 (0)',
+            'threshold.strict': '严格 (1.0)',
+            'threshold.hint.low': '• 值越低，结果越多',
+            'threshold.hint.high': '• 值越高，结果越精确',
+            
+            // 磁盘空间
+            'disk.calculating': '计算中...',
+            'disk.space.tooltip': '当前文件夹所在磁盘剩余空间',
         },
         
         en: {
@@ -440,6 +460,26 @@ const i18n = {
             // Empty states
             'empty.import.audio': 'Please import audio files',
             'empty.folder.create': 'No folders yet, click the button above to create',
+            
+            // Waveform
+            'waveform.empty.state': 'Please import or select an audio file',
+            
+            // Model status
+            'model.loading': 'Loading model...',
+            'model.ready': 'Model ready',
+            'model.error': 'Model error',
+            'model.status.adjust.threshold': 'Click to adjust search similarity threshold',
+            
+            // Threshold settings
+            'threshold.title': 'Search Similarity Threshold',
+            'threshold.loose': 'Loose (0)',
+            'threshold.strict': 'Strict (1.0)',
+            'threshold.hint.low': '• Lower value = more results',
+            'threshold.hint.high': '• Higher value = more precise',
+            
+            // Disk space
+            'disk.calculating': 'Calculating...',
+            'disk.space.tooltip': 'Remaining disk space in current folder',
         }
     },
     

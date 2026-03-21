@@ -199,28 +199,28 @@
             <div class="relative">
                 <div id="modelStatusDisplay" class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs border opacity-80 hover:opacity-100 transition-opacity cursor-pointer"
                      style="background-color: var(--bg-tertiary); border-color: var(--border-color); display: none;"
-                     title="点击调整搜索相似度阈值">
+                     data-i18n-title="model.status.adjust.threshold">
                     <div id="modelStatusIcon" class="w-3.5 h-3.5 rounded-full border-2 border-t-transparent animate-spin" style="border-color: var(--text-secondary); border-top-color: transparent;"></div>
-                    <span id="modelStatusText">模型加载中...</span>
+                    <span id="modelStatusText" data-i18n="model.loading">模型加载中...</span>
                 </div>
                 
                 <!-- 阈值调整弹窗 -->
                 <div id="thresholdPopup" class="absolute top-full right-0 mt-2 p-4 rounded-lg border shadow-lg z-50 hidden"
                      style="background-color: var(--bg-secondary); border-color: var(--border-color); min-width: 220px;">
                     <div class="flex items-center justify-between mb-3">
-                        <span class="text-xs font-medium" style="color: var(--text-primary);">搜索相似度阈值</span>
+                        <span class="text-xs font-medium" style="color: var(--text-primary);" data-i18n="threshold.title">搜索相似度阈值</span>
                         <span id="thresholdValue" class="text-xs font-bold px-2 py-0.5 rounded" style="background-color: var(--bg-tertiary); color: var(--text-secondary);">0.15</span>
                     </div>
                     <input type="range" id="thresholdSlider" min="0" max="100" value="15" 
                            class="w-full h-2 rounded-lg appearance-none cursor-pointer"
                            style="background-color: var(--bg-tertiary);">
                     <div class="flex justify-between mt-2 text-xs" style="color: var(--text-secondary);">
-                        <span>宽松 (0)</span>
-                        <span>严格 (1.0)</span>
+                        <span data-i18n="threshold.loose">宽松 (0)</span>
+                        <span data-i18n="threshold.strict">严格 (1.0)</span>
                     </div>
                     <div class="mt-3 pt-3 border-t text-xs" style="border-color: var(--border-color); color: var(--text-secondary);">
-                        <p>• 值越低，结果越多</p>
-                        <p>• 值越高，结果越精确</p>
+                        <p data-i18n="threshold.hint.low">• 值越低，结果越多</p>
+                        <p data-i18n="threshold.hint.high">• 值越高，结果越精确</p>
                     </div>
                 </div>
             </div>
@@ -228,9 +228,9 @@
             <!-- 磁盘空间显示 -->
             <div id="diskSpaceDisplay" class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs border opacity-80 hover:opacity-100 transition-opacity cursor-help"
                  style="background-color: var(--bg-tertiary); border-color: var(--border-color);"
-                 title="当前文件夹所在磁盘剩余空间">
+                 data-i18n-title="disk.space.tooltip">
                 <i data-lucide="hard-drive" class="w-3.5 h-3.5"></i>
-                <span id="diskSpaceText" data-i18n="loading">计算中...</span>
+                <span id="diskSpaceText" data-i18n="disk.calculating">计算中...</span>
             </div>
             
             <div class="relative">
@@ -391,7 +391,7 @@
         <div class="flex-1 relative min-h-0" id="waveformContainer">
             <!-- 空状态提示 -->
             <div id="waveformEmptyState" class="absolute inset-0 flex items-center justify-center z-10">
-                <span class="text-sm opacity-40" style="color: var(--text-secondary);">请导入或选择一个音频文件</span>
+                <span class="text-sm opacity-40" style="color: var(--text-secondary);" data-i18n="waveform.empty.state">请导入或选择一个音频文件</span>
             </div>
 
             <!-- 拖拽手柄（选区拖拽导出） -->
@@ -708,7 +708,7 @@
                         modelIcon.className = 'w-3.5 h-3.5 rounded-full border-2 border-t-transparent animate-spin';
                         modelIcon.style.borderColor = 'var(--text-secondary)';
                         modelIcon.style.borderTopColor = 'transparent';
-                        modelText.textContent = '模型加载中...';
+                        modelText.textContent = i18n.t('model.loading');
                         modelDisplay.style.borderColor = 'var(--border-color)';
                     } else if (result.model_status.loaded) {
                         // 模型已加载 - 显示绿色对勾
@@ -716,7 +716,7 @@
                         modelIcon.className = 'w-3.5 h-3.5 flex items-center justify-center';
                         modelIcon.style.border = 'none';
                         modelIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px;"><polyline points="20 6 9 17 4 12"></polyline></svg>';
-                        modelText.textContent = '模型就绪';
+                        modelText.textContent = i18n.t('model.ready');
                         modelText.style.color = '#22c55e';
                         modelDisplay.style.borderColor = '#22c55e';
                     } else if (result.model_status.error) {
@@ -725,7 +725,7 @@
                         modelIcon.className = 'w-3.5 h-3.5 flex items-center justify-center';
                         modelIcon.style.border = 'none';
                         modelIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
-                        modelText.textContent = '模型错误';
+                        modelText.textContent = i18n.t('model.error');
                         modelText.style.color = '#ef4444';
                         modelDisplay.style.borderColor = '#ef4444';
                     } else {
