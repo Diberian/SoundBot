@@ -218,7 +218,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   checkFullDiskAccess: () => ipcRenderer.invoke('check-full-disk-access'),
 
   // 打开隐私设置（macOS）
-  openPrivacySettings: () => ipcRenderer.invoke('open-privacy-settings')
+  openPrivacySettings: () => ipcRenderer.invoke('open-privacy-settings'),
+
+  // 资源管理
+  resources: {
+    // 检查资源状态
+    check: () => ipcRenderer.invoke('check-resources'),
+    // 打开下载页面
+    openDownloadPage: () => ipcRenderer.invoke('open-download-page')
+  }
 });
 
 // 暴露一些常用的 Node.js 功能（安全版本）

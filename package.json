@@ -11,7 +11,11 @@
     "build:win": "electron-builder --win",
     "build:linux": "electron-builder --linux",
     "pack": "electron-builder --dir",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "electron-builder install-app-deps",
+    "download:models": "python scripts/download_manager.py download models",
+    "download:venv": "python scripts/download_manager.py download venv",
+    "download:all": "python scripts/download_manager.py download all",
+    "setup": "python scripts/download_manager.py setup"
   },
   "keywords": ["electron", "audio", "sound", "manager", "ai", "semantic-search", "clap"],
   "author": "Nagisa_Huckrick (胡杨) <Nagisa_Huckrick@yeah.net>",
@@ -37,14 +41,30 @@
       "wavesurfer.min.js",
       "wavesurfer.regions.min.js",
       "assets/**/*",
-      "backend/**/*",
       "config/**/*",
-      "models/**/*",
+      "scripts/download_manager.py",
+      "download_config.json",
       "!backend/__pycache__",
       "!backend/db/*.db",
       "!backend/**/*.pyc",
-      "!backend/venv/**/__pycache__",
-      "!backend/venv/**/*.pyc"
+      "!backend/venv/**",
+      "!backend/models/**",
+      "!models/**",
+      "!downloads/**"
+    ],
+    "extraResources": [
+      {
+        "from": "backend",
+        "to": "backend",
+        "filter": [
+          "**/*",
+          "!__pycache__",
+          "!db/*.db",
+          "!**/*.pyc",
+          "!venv/**",
+          "!models/**"
+        ]
+      }
     ],
     "mac": {
       "category": "public.app-category.music",

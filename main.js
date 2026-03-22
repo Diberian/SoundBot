@@ -19,7 +19,7 @@
 const { app, BrowserWindow, Menu, ipcMain, dialog, protocol, net, session, Notification, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { spawn } = require('child_process');
+const { spawn, exec } = require('child_process');
 
 // 自定义协议：用于在渲染进程中安全加载本地音频（避免 file:// 跨源限制）
 const AUDIO_PROTOCOL = 'soundmind-audio';
@@ -33,6 +33,16 @@ let mainWindow;
 let backendProcess = null;
 const BACKEND_PORT = 8000;
 const API_BASE_URL = `http://127.0.0.1:${BACKEND_PORT}/api/v1`;
+
+// 资源下载配置
+const DOWNLOAD_CONFIG = {
+  githubRepo: 'Huckrick/SoundBot',
+  resources: {
+    models: { filename: 'models.zip', required: true },
+    venvMacos: { filename: 'venv-macos.zip', required: false, platform: 'darwin' },
+    venvWindows: { filename: 'venv-windows.zip', required: false, platform: 'win32' }
+  }
+};
 
 // ==================== 路径辅助函数 ====================
 
@@ -51,18 +61,36 @@ function getAppPath() {
 }
 
 /**
+ * 获取应用根目录（用户数据目录）
+ * 这是存放模型和 venv 的外部目录
+ */
+function getAppRootDir() {
+  if (app.isPackaged) {
+    // 生产环境：应用所在目录
+    return path.dirname(process.execPath);
+  }
+  // 开发环境：项目根目录
+  return __dirname;
+}
+
+/**
  * 获取后端路径
+ * 优先检查外部路径，然后检查打包内部路径
  */
 function getBackendPath() {
+  // 可能的路径列表（按优先级排序）
   const possiblePaths = [
-    // 生产环境（extraResources）- 优先检查
-    path.join(process.resourcesPath, 'backend'),
+    // 外部路径 - 与应用同一目录（用户解压资源到这里）
+    path.join(getAppRootDir(), 'backend'),
     // 开发环境
     path.join(__dirname, 'backend'),
-    // 备用路径
-    path.join(getAppPath(), 'backend')
+    // 生产环境 - extraResources
+    path.join(process.resourcesPath, 'backend'),
+    // 生产环境 - app bundle 内
+    path.join(process.resourcesPath, 'app', 'backend'),
+    path.join(process.resourcesPath, 'app.asar.unpacked', 'backend'),
   ];
-  
+
   for (const p of possiblePaths) {
     const mainPy = path.join(p, 'main.py');
     console.log(`[Backend] 检查路径: ${p}, main.py 存在: ${fs.existsSync(mainPy)}`);
@@ -71,7 +99,7 @@ function getBackendPath() {
       return p;
     }
   }
-  
+
   // 默认返回第一个路径
   console.log(`[Backend] 警告: 未找到后端路径，使用默认值: ${possiblePaths[0]}`);
   return possiblePaths[0];
@@ -79,21 +107,106 @@ function getBackendPath() {
 
 /**
  * 获取模型路径
+ * 优先检查外部路径
  */
 function getModelsPath() {
   const possiblePaths = [
+    // 外部路径 - 与应用同一目录（用户推荐的位置）
+    path.join(getAppRootDir(), 'models'),
+    // 开发环境
+    path.join(__dirname, 'models'),
+    // 生产环境 - extraResources
     path.join(process.resourcesPath, 'models'),
-    path.join(getAppPath(), 'models'),
-    path.join(__dirname, 'models')
+    // 生产环境 - app bundle 内
+    path.join(process.resourcesPath, 'app', 'models'),
   ];
-  
+
   for (const p of possiblePaths) {
     if (fs.existsSync(p)) {
+      console.log(`[Backend] 找到模型路径: ${p}`);
       return p;
     }
   }
-  
+
+  // 默认返回外部路径（即使不存在，用于后续下载）
+  console.log(`[Backend] 警告: 未找到模型路径，使用默认外部路径: ${possiblePaths[0]}`);
   return possiblePaths[0];
+}
+
+/**
+ * 获取 venv 路径
+ * 优先检查外部路径
+ */
+function getVenvPath() {
+  const backendPath = getBackendPath();
+  
+  const possiblePaths = [
+    // 外部路径
+    path.join(getAppRootDir(), 'backend', 'venv'),
+    // 开发环境
+    path.join(backendPath, 'venv'),
+  ];
+
+  for (const p of possiblePaths) {
+    const pythonPath = process.platform === 'win32' 
+      ? path.join(p, 'Scripts', 'python.exe')
+      : path.join(p, 'bin', 'python');
+    
+    if (fs.existsSync(pythonPath)) {
+      console.log(`[Backend] 找到 venv 路径: ${p}`);
+      return p;
+    }
+  }
+
+  console.log(`[Backend] 警告: 未找到 venv，使用默认路径: ${possiblePaths[0]}`);
+  return possiblePaths[0];
+}
+
+/**
+ * 检查资源是否已下载
+ */
+function checkResources() {
+  const modelsPath = getModelsPath();
+  const venvPath = getVenvPath();
+  
+  const modelsExist = fs.existsSync(modelsPath) && fs.existsSync(path.join(modelsPath, 'clap'));
+  const venvExist = fs.existsSync(venvPath);
+  
+  return {
+    models: modelsExist,
+    venv: venvExist,
+    modelsPath,
+    venvPath,
+    ready: modelsExist && venvExist
+  };
+}
+
+/**
+ * 显示资源缺失对话框
+ */
+async function showResourceMissingDialog(missing) {
+  const missingItems = [];
+  if (!missing.models) missingItems.push('AI 模型文件');
+  if (!missing.venv) missingItems.push('Python 虚拟环境');
+  
+  const result = await dialog.showMessageBox(mainWindow, {
+    type: 'warning',
+    title: '缺少必要资源',
+    message: `缺少以下资源:\n${missingItems.join('\n')}`,
+    detail: `请从 GitHub Releases 下载以下文件并解压到应用目录:\n` +
+            `1. models.zip → ${path.dirname(getModelsPath())}\n` +
+            `2. venv-${process.platform === 'darwin' ? 'macos' : 'windows'}.zip → ${path.dirname(getVenvPath())}`,
+    buttons: ['打开下载页面', '稍后手动下载'],
+    defaultId: 0,
+    cancelId: 1
+  });
+  
+  if (result.response === 0) {
+    const { shell } = require('electron');
+    shell.openExternal(`https://github.com/${DOWNLOAD_CONFIG.githubRepo}/releases`);
+  }
+  
+  return result.response;
 }
 
 function createWindow() {
@@ -863,6 +976,23 @@ function setupIpcHandlers() {
           return { success: false, error: '通知功能在此平台不可用' };
         }
 
+        case 'check-resources': {
+          // 检查资源状态
+          const resources = checkResources();
+          return { 
+            success: true, 
+            resources: resources,
+            downloadUrl: `https://github.com/${DOWNLOAD_CONFIG.githubRepo}/releases`
+          };
+        }
+
+        case 'open-download-page': {
+          // 打开下载页面
+          const { shell } = require('electron');
+          shell.openExternal(`https://github.com/${DOWNLOAD_CONFIG.githubRepo}/releases`);
+          return { success: true };
+        }
+
         default:
           return { success: false, error: '未知操作' };
       }
@@ -879,6 +1009,20 @@ async function startBackendServer() {
     return { success: true, message: '后端服务已在运行' };
   }
 
+  // 检查资源是否就绪
+  const resources = checkResources();
+  console.log('[Backend] 资源检查:', resources);
+  
+  if (!resources.ready) {
+    console.warn('[Backend] 资源未就绪，显示提示对话框');
+    await showResourceMissingDialog(resources);
+    return { 
+      success: false, 
+      error: '缺少必要资源',
+      details: resources
+    };
+  }
+
   const maxRetries = 3;
   let lastError = null;
 
@@ -890,11 +1034,13 @@ async function startBackendServer() {
       const backendPath = getBackendPath();
       const mainPy = path.join(backendPath, 'main.py');
       const modelsPath = getModelsPath();
+      const venvPath = getVenvPath();
 
       console.log(`[Backend] 后端路径: ${backendPath}`);
       console.log(`[Backend] 模型路径: ${modelsPath}`);
       console.log(`[Backend] 模型路径存在: ${fs.existsSync(modelsPath)}`);
       console.log(`[Backend] CLAP模型存在: ${fs.existsSync(path.join(modelsPath, 'clap'))}`);
+      console.log(`[Backend] venv路径: ${venvPath}`);
 
       // 检查后端文件是否存在
       if (!fs.existsSync(mainPy)) {
@@ -920,11 +1066,11 @@ async function startBackendServer() {
       };
       console.log(`[Backend] 环境变量 SOUNDBOT_MODELS_PATH: ${envVars.SOUNDBOT_MODELS_PATH}`);
 
-      // 优先使用 backend/venv 中的 Python 解释器
-      let pythonCmd = 'python';
-      const venvPython = path.join(backendPath, 'venv', 'bin', 'python');
-      const venvPython3 = path.join(backendPath, 'venv', 'bin', 'python3');
-      const venvPythonWin = path.join(backendPath, 'venv', 'Scripts', 'python.exe');
+      // 优先使用外部 venv 中的 Python 解释器
+      let pythonCmd;
+      const venvPython = path.join(venvPath, 'bin', 'python');
+      const venvPython3 = path.join(venvPath, 'bin', 'python3');
+      const venvPythonWin = path.join(venvPath, 'Scripts', 'python.exe');
 
       if (fs.existsSync(venvPython)) {
         pythonCmd = venvPython;
@@ -933,7 +1079,9 @@ async function startBackendServer() {
       } else if (fs.existsSync(venvPythonWin)) {
         pythonCmd = venvPythonWin;
       } else {
-        pythonCmd = 'python3';
+        // 如果没有找到 venv，尝试系统 Python
+        pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+        console.warn(`[Backend] 警告: 未找到 venv Python，使用系统 Python: ${pythonCmd}`);
       }
 
       console.log(`[Backend] 使用 Python: ${pythonCmd}`);

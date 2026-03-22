@@ -16,7 +16,139 @@ env:
   PYTHONIOENCODING: utf-8
 
 jobs:
-  build-macos:
+  # 构建模型包（跨平台共享）
+  build-models:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup Python virtual environment
+        run: |
+          cd backend
+          python -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+          pip install transformers torch torchaudio
+
+      - name: Download AI models
+        run: |
+          cd backend
+          source venv/bin/activate
+          cd ..
+          python scripts/download_models.py
+        env:
+          PYTHONIOENCODING: utf-8
+
+      - name: Create Models package
+        run: |
+          echo "=== Creating Models package ==="
+          mkdir -p release
+          cd models
+          zip -r ../release/models.zip .
+          cd ..
+          echo "Models package created:"
+          ls -lh release/
+          echo "=== Package contents ==="
+          unzip -l release/models.zip | head -20
+
+      - name: Upload Models artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: models-package
+          path: release/models.zip
+          if-no-files-found: error
+
+  # 构建 macOS venv 包
+  build-venv-macos:
+    runs-on: macos-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup Python virtual environment
+        run: |
+          cd backend
+          python -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Create macOS venv package
+        run: |
+          echo "=== Creating macOS venv package ==="
+          mkdir -p release
+          cd backend
+          zip -r ../release/venv-macos.zip venv
+          cd ..
+          echo "macOS venv package created:"
+          ls -lh release/
+
+      - name: Upload macOS venv artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: venv-macos-package
+          path: release/venv-macos.zip
+          if-no-files-found: error
+
+  # 构建 Windows venv 包
+  build-venv-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup Python virtual environment
+        shell: pwsh
+        run: |
+          cd backend
+          python -m venv venv
+          .\venv\Scripts\Activate.ps1
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Create Windows venv package
+        shell: pwsh
+        run: |
+          echo "=== Creating Windows venv package ==="
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          Compress-Archive -Path backend\venv -DestinationPath release\venv-windows.zip -Force
+          Write-Host "Windows venv package created:"
+          Get-ChildItem release/ | Format-Table Name, Length
+
+      - name: Upload Windows venv artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: venv-windows-package
+          path: release/venv-windows.zip
+          if-no-files-found: error
+
+  # 构建 macOS 应用（轻量级，不包含模型和venv）
+  build-macos-app:
     runs-on: macos-latest
     permissions:
       contents: read
@@ -31,32 +163,8 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
       - name: Install Node dependencies
         run: npm ci
-
-      - name: Setup Python virtual environment
-        run: |
-          cd backend
-          python -m venv venv
-          source venv/bin/activate
-          pip install --upgrade pip
-          pip install -r requirements.txt
-          echo "Python dependencies installed:"
-          pip list | head -20
-
-      - name: Download AI models
-        run: |
-          cd backend
-          source venv/bin/activate
-          cd ..
-          python scripts/download_models.py
-        env:
-          PYTHONIOENCODING: utf-8
 
       - name: Build macOS
         run: npm run build:mac
@@ -67,32 +175,28 @@ jobs:
         run: |
           echo "=== macOS Build Size ==="
           ls -lh dist/
-          du -sh dist/
 
       - name: List packaged files
         run: |
-          echo "=== Checking if venv and models are packaged ==="
+          echo "=== Checking app bundle contents ==="
           if [ -d "dist/mac/SoundBot.app/Contents/Resources/app" ]; then
-            echo "Checking app bundle contents:"
             ls -la "dist/mac/SoundBot.app/Contents/Resources/app/"
-            echo ""
-            echo "Checking backend/venv:"
-            ls -la "dist/mac/SoundBot.app/Contents/Resources/app/backend/" | head -20
-            echo ""
-            echo "Checking models:"
-            ls -la "dist/mac/SoundBot.app/Contents/Resources/app/models/" 2>/dev/null || echo "models not found!"
+          fi
+          if [ -d "dist/mac-arm64/SoundBot.app/Contents/Resources/app" ]; then
+            ls -la "dist/mac-arm64/SoundBot.app/Contents/Resources/app/"
           fi
 
-      - name: Upload macOS artifact
+      - name: Upload macOS app artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SoundBot-macOS
+          name: SoundBot-macOS-app
           path: |
             dist/*.dmg
             dist/*.zip
           if-no-files-found: warn
 
-  build-windows:
+  # 构建 Windows 应用（轻量级，不包含模型和venv）
+  build-windows-app:
     runs-on: windows-latest
     permissions:
       contents: read
@@ -107,34 +211,8 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
       - name: Install Node dependencies
         run: npm ci
-
-      - name: Setup Python virtual environment
-        shell: pwsh
-        run: |
-          cd backend
-          python -m venv venv
-          .\venv\Scripts\Activate.ps1
-          pip install --upgrade pip
-          pip install -r requirements.txt
-          echo "Python dependencies installed:"
-          pip list | Select-Object -First 20
-
-      - name: Download AI models
-        shell: pwsh
-        run: |
-          cd backend
-          .\venv\Scripts\Activate.ps1
-          cd ..
-          python scripts/download_models.py
-        env:
-          PYTHONIOENCODING: utf-8
 
       - name: Build Windows
         run: npm run build:win
@@ -146,51 +224,27 @@ jobs:
         run: |
           echo "=== Windows Build Size ==="
           Get-ChildItem dist/ | ForEach-Object { Write-Host "$($_.Name) - $([math]::Round($_.Length/1MB, 2)) MB" }
-          $total = Get-ChildItem dist/ -Recurse | Measure-Object -Property Length -Sum
-          Write-Host "Total: $([math]::Round($total.Sum/1GB, 2)) GB"
 
       - name: List packaged files
         shell: pwsh
         run: |
-          echo "=== Checking if venv and models are packaged ==="
-          if (Test-Path "dist/win-unpacked") {
-            echo "Checking win-unpacked contents:"
-            Get-ChildItem "dist/win-unpacked" -Depth 1
-            echo ""
-            echo "Checking resources:"
-            if (Test-Path "dist/win-unpacked/resources") {
-              Get-ChildItem "dist/win-unpacked/resources" -Depth 1
-            }
-            echo ""
-            echo "Checking backend:"
-            if (Test-Path "dist/win-unpacked/resources/app/backend") {
-              Get-ChildItem "dist/win-unpacked/resources/app/backend" | Select-Object Name, Length
-            } else {
-              Write-Host "backend not found!"
-            }
-            echo ""
-            echo "Checking models:"
-            if (Test-Path "dist/win-unpacked/resources/app/models") {
-              $modelsSize = Get-ChildItem "dist/win-unpacked/resources/app/models" -Recurse | Measure-Object -Property Length -Sum
-              Write-Host "models found! Total size: $([math]::Round($modelsSize.Sum/1GB, 2)) GB"
-            } else {
-              Write-Host "models not found!"
-            }
-          } else {
-            Write-Host "dist/win-unpacked not found!"
+          echo "=== Checking app bundle contents ==="
+          if (Test-Path "dist/win-unpacked/resources/app") {
+            Get-ChildItem "dist/win-unpacked/resources/app" -Depth 1
           }
 
-      - name: Upload Windows artifact
+      - name: Upload Windows app artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SoundBot-Windows
+          name: SoundBot-Windows-app
           path: |
             dist/*.exe
             dist/*.msi
           if-no-files-found: warn
 
+  # 发布 Release
   release:
-    needs: [build-macos, build-windows]
+    needs: [build-models, build-venv-macos, build-venv-windows, build-macos-app, build-windows-app]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -203,25 +257,90 @@ jobs:
 
       - name: List artifacts
         run: |
-          echo "Downloaded artifacts:"
-          ls -la artifacts/
-          find artifacts/ -type f -name "*"
-
-      - name: Check artifact sizes
-        run: |
-          echo "=== Artifact Sizes ==="
-          find artifacts/ -type f -exec ls -lh {} \;
-          echo ""
-          echo "Total size per platform:"
-          du -sh artifacts/*
+          echo "=== All Artifacts ==="
+          find artifacts/ -type f | while read f; do
+            size=$(ls -lh "$f" | awk '{print $5}')
+            echo "$f - $size"
+          done
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            artifacts/SoundBot-macOS/*
-            artifacts/SoundBot-Windows/*
+            artifacts/models-package/models.zip
+            artifacts/venv-macos-package/venv-macos.zip
+            artifacts/venv-windows-package/venv-windows.zip
+            artifacts/SoundBot-macOS-app/*.dmg
+            artifacts/SoundBot-macOS-app/*.zip
+            artifacts/SoundBot-Windows-app/*.exe
+            artifacts/SoundBot-Windows-app/*.msi
           draft: false
           prerelease: true
+          body: |
+            ## SoundBot 新版本发布
+
+            ### 安装说明
+
+            本次发布采用**分离式架构**，应用包、模型和 Python 环境分开下载：
+
+            #### 1. 下载应用包
+            - **macOS**: `SoundBot-x.x.x.dmg` 或 `SoundBot-x.x.x-mac.zip`
+            - **Windows**: `SoundBot Setup x.x.x.exe` 或 `SoundBot-x.x.x-win.zip`
+
+            #### 2. 下载资源文件（必需）
+            根据你的平台下载对应的资源文件：
+
+            | 资源 | 文件名 | 说明 |
+            |------|--------|------|
+            | AI 模型 | `models.zip` | **所有平台通用**，包含 CLAP 模型 |
+            | macOS 环境 | `venv-macos.zip` | macOS Python 虚拟环境 |
+            | Windows 环境 | `venv-windows.zip` | Windows Python 虚拟环境 |
+
+            #### 3. 安装步骤
+
+            **macOS:**
+            ```bash
+            # 1. 安装应用
+            # 打开 DMG 文件，将 SoundBot 拖到 Applications 文件夹
+
+            # 2. 解压资源文件到应用目录
+            cd /Applications/SoundBot.app/Contents/MacOS
+            unzip ~/Downloads/models.zip
+            unzip ~/Downloads/venv-macos.zip
+            ```
+
+            **Windows:**
+            ```powershell
+            # 1. 安装应用
+            # 运行 SoundBot Setup x.x.x.exe
+
+            # 2. 解压资源文件到应用目录
+            # 将 models.zip 和 venv-windows.zip 解压到 SoundBot 安装目录
+            # 默认路径: C:\Users\<用户名>\AppData\Local\Programs\SoundBot
+            ```
+
+            #### 4. 自动下载（可选）
+            应用启动时会自动检测资源，如果缺失会提示你从 Releases 页面下载。
+
+            ### 文件说明
+
+            - **应用包** (~50-100MB): 只包含 Electron 前端和 Python 后端代码
+            - **models.zip** (~500MB-1GB): AI 模型文件，所有平台共用
+            - **venv-*.zip** (~1-2GB): Python 虚拟环境，包含所有依赖
+
+            ### 更新说明
+
+            - **应用更新**: 直接下载新的应用包覆盖安装，无需重新下载模型和 venv
+            - **模型更新**: 如果新版本需要更新模型，会单独发布新的 models.zip
+            - **环境更新**: 如果依赖有变化，会单独发布新的 venv-*.zip
+
+            ### 手动配置下载源
+
+            如果需要从其他仓库下载资源，可以创建 `download_config.json`:
+            ```json
+            {
+              "github_repo": "Huckrick/SoundBot"
+            }
+            ```
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

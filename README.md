@@ -12,15 +12,108 @@
 
 ## 📥 下载 / Download
 
-[![Download for macOS](https://img.shields.io/badge/Download-macOS-blue.svg)](https://github.com/Huckrick/SoundBot/releases/latest)  
-[![Download for Windows](https://img.shields.io/badge/Download-Windows-blue.svg)](https://github.com/Huckrick/SoundBot/releases/latest)
-
 **最新版本 / Latest Release**: [v0.1.1-alpha](https://github.com/Huckrick/SoundBot/releases/latest)
+
+### 🆕 新架构：分离式发布 / New Architecture: Split Release
+
+从 v0.1.1-alpha 开始，SoundBot 采用**分离式架构**，将应用包、AI 模型和 Python 环境分开发布：
+
+Starting from v0.1.1-alpha, SoundBot adopts a **split architecture**, separating the app package, AI models, and Python environment:
+
+| 组件 / Component | 文件名 / Filename | 大小 / Size | 说明 / Description |
+|-----------------|------------------|-------------|-------------------|
+| **应用包 / App** | `SoundBot-*.dmg` / `SoundBot Setup *.exe` | ~100MB | 前端界面 + Python 后端代码 |
+| **AI 模型 / Models** | `models.zip` | ~500MB-1GB | **所有平台通用** / All platforms |
+| **macOS 环境** | `venv-macos.zip` | ~1-2GB | macOS Python 虚拟环境 |
+| **Windows 环境** | `venv-windows.zip` | ~1-2GB | Windows Python 虚拟环境 |
 
 ### 界面预览 / Screenshot
 
 ![SoundBot Home1](https://raw.githubusercontent.com/Huckrick/SoundBot/main/Home1.png)  
 ![SoundBot Home2](https://raw.githubusercontent.com/Huckrick/SoundBot/main/Home2.png)
+
+***
+
+## 🚀 安装指南 / Installation Guide
+
+### 首次安装 / First-time Installation
+
+#### macOS
+
+1. **下载应用包** / Download app package
+   ```bash
+   # 下载 SoundBot-x.x.x.dmg（根据你的架构选择 Intel 或 Apple Silicon 版本）
+   ```
+
+2. **安装应用** / Install app
+   - 打开 `.dmg` 文件，将 SoundBot 拖到 Applications 文件夹
+
+3. **下载资源文件** / Download resources
+   - 下载 `models.zip`（所有平台通用）
+   - 下载 `venv-macos.zip`
+
+4. **解压资源文件** / Extract resources
+   ```bash
+   # 方法 1：解压到应用包内（推荐）
+   cd /Applications/SoundBot.app/Contents/MacOS
+   unzip ~/Downloads/models.zip
+   unzip ~/Downloads/venv-macos.zip
+   
+   # 方法 2：解压到应用同级目录（便于管理）
+   cd /Applications
+   unzip ~/Downloads/models.zip
+   unzip ~/Downloads/venv-macos.zip
+   ```
+
+5. **启动应用** / Launch
+   - 双击 SoundBot 图标启动
+   - 如果提示缺少资源，应用会自动检测并引导你下载
+
+#### Windows
+
+1. **下载应用包** / Download app package
+   - 下载 `SoundBot Setup x.x.x.exe`
+
+2. **安装应用** / Install app
+   - 运行 `.exe` 安装程序，按向导完成安装
+   - 默认安装路径：`C:\Users\<用户名>\AppData\Local\Programs\SoundBot`
+
+3. **下载资源文件** / Download resources
+   - 下载 `models.zip`（所有平台通用）
+   - 下载 `venv-windows.zip`
+
+4. **解压资源文件** / Extract resources
+   - 将 `models.zip` 解压到 SoundBot 安装目录，得到 `models` 文件夹
+   - 将 `venv-windows.zip` 解压到 SoundBot 安装目录，得到 `backend\venv` 文件夹
+   - 最终目录结构：
+     ```
+     SoundBot/
+     ├── SoundBot.exe
+     ├── backend/
+     │   ├── main.py
+     │   ├── core/
+     │   └── venv/          # 从 venv-windows.zip 解压
+     ├── models/            # 从 models.zip 解压
+     │   └── clap/
+     └── ...
+     ```
+
+5. **启动应用** / Launch
+   - 双击 SoundBot 图标启动
+
+### 更新版本 / Update Version
+
+**应用更新** / App Update：
+- 只需下载并安装新的应用包（~100MB）
+- 模型和 Python 环境**不需要**重新下载
+
+**模型更新** / Model Update：
+- 如果新版本需要更新模型，会单独发布新的 `models.zip`
+- 下载后覆盖解压即可
+
+**环境更新** / Environment Update：
+- 如果依赖有变化，会单独发布新的 `venv-*.zip`
+- 下载后覆盖解压即可
 
 ***
 
@@ -74,33 +167,6 @@ This project was inspired by **[OpenClaw](https://github.com/miaoxworld/openclaw
 
 ***
 
-## 📦 安装指南 / Installation Guide
-
-### 系统要求 / System Requirements
-
-- **macOS**: 10.12+ (Intel/Apple Silicon)
-- **Windows**: Windows 10/11 64-bit
-- **RAM**: 4GB+ (推荐 8GB)
-- **存储空间**: 2GB+ 可用空间 / 2GB+ free space
-
-### 快速开始 / Quick Start
-
-1. **下载安装包 / Download Installer**
-   - 从 [Releases](https://github.com/Huckrick/SoundBot/releases) 页面下载对应系统的安装包
-   - Download the installer for your system from the [Releases](https://github.com/Huckrick/SoundBot/releases) page
-
-2. **安装应用 / Install Application**
-   - **macOS**: 打开 `.dmg` 文件，将 SoundBot 拖到 Applications 文件夹
-   - **Windows**: 运行 `.exe` 安装程序，按向导完成安装
-
-3. **开始使用 / Start Using**
-   - 导入你的音效库文件夹
-   - Import your sound effect library folder
-   - 开始语义搜索！
-   - Start semantic searching!
-
-***
-
 ## 🛠️ 开发环境搭建 / Development Setup
 
 ### 前提条件 / Prerequisites
@@ -119,18 +185,38 @@ cd SoundBot
 # 安装 Node 依赖 / Install Node dependencies
 npm install
 
-# 安装 Python 依赖 / Install Python dependencies
+# 方式 1：自动下载资源 / Method 1: Auto-download resources
+npm run setup
+
+# 方式 2：手动设置 / Method 2: Manual setup
 cd backend
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 cd ..
-
-# 下载 AI 模型 / Download AI models
 python scripts/download_models.py
 
 # 启动开发服务器 / Start development server
 npm run dev
+```
+
+### 开发命令 / Development Commands
+
+```bash
+# 检查资源状态
+python scripts/download_manager.py check
+
+# 下载模型
+npm run download:models
+
+# 下载当前平台的 venv
+npm run download:venv
+
+# 下载所有资源
+npm run download:all
+
+# 自动设置环境
+npm run setup
 ```
 
 ***
@@ -173,10 +259,21 @@ npm run dev
 
 ### 存储空间 / Storage Space
 
-- **默认存储位置**：用户目录下的 `.soundbot/` 文件夹
-- **模型文件**：约 1.5GB
+- **应用包**：约 100MB
+- **AI 模型**：约 500MB-1GB
+- **Python 环境**：约 1-2GB
 - **数据库**：根据音效库大小增长
-- **建议**：定期清理不需要的音效库，释放空间
+- **建议**：确保有足够的磁盘空间
+
+### 资源下载配置 / Resource Download Config
+
+如果需要从其他仓库下载资源，可以创建 `download_config.json`：
+
+```json
+{
+  "github_repo": "your-username/SoundBot"
+}
+```
 
 ### 清理建议 / Cleanup Recommendations
 
