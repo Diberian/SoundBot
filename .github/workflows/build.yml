@@ -126,14 +126,25 @@ jobs:
         shell: pwsh
         run: |
           cd backend
-          # 先创建排除 uvloop 的 requirements 文件
-          Get-Content requirements.txt | Where-Object { $_ -notmatch "uvloop" -and $_ -match "\S" } | Set-Content requirements-windows.txt
-          Write-Host "=== Created requirements-windows.txt (excluded uvloop) ==="
-          Get-Content requirements-windows.txt | Select-Object -First 20
           python -m venv venv
           .\venv\Scripts\Activate.ps1
           pip install --upgrade pip
-          # 使用临时 requirements 文件安装所有依赖
+          # 安装依赖，但排除 uvloop（Windows 不支持）
+          # 使用 Python 脚本解析 requirements.txt
+          python -c "
+import re
+with open('requirements.txt', 'r') as f:
+    lines = f.readlines()
+with open('requirements-windows.txt', 'w') as f:
+    for line in lines:
+        # 跳过 uvloop 和注释/空行
+        if not re.match(r'^\s*(uvloop|#)', line) and line.strip():
+            f.write(line)
+print('Created requirements-windows.txt')
+"
+          Write-Host "=== Filtered requirements (first 20 lines) ==="
+          Get-Content requirements-windows.txt | Select-Object -First 20
+          # 安装过滤后的依赖
           pip install -r requirements-windows.txt
           # 删除临时文件
           Remove-Item requirements-windows.txt
