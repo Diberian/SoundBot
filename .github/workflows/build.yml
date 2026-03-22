@@ -126,14 +126,14 @@ jobs:
         shell: pwsh
         run: |
           cd backend
+          # 先创建排除 uvloop 的 requirements 文件
+          Get-Content requirements.txt | Where-Object { $_ -notmatch "uvloop" -and $_ -match "\S" } | Set-Content requirements-windows.txt
+          Write-Host "=== Created requirements-windows.txt (excluded uvloop) ==="
+          Get-Content requirements-windows.txt | Select-Object -First 20
           python -m venv venv
           .\venv\Scripts\Activate.ps1
           pip install --upgrade pip
-          # 先安装 PyTorch（Windows 需要特殊处理）
-          pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cpu
-          # 创建临时 requirements 文件，排除 uvloop（不支持 Windows）
-          Get-Content requirements.txt | Where-Object { $_ -notmatch "^uvloop" -and $_ -match "\S" } | Set-Content requirements-windows.txt
-          # 安装其他依赖
+          # 使用临时 requirements 文件安装所有依赖
           pip install -r requirements-windows.txt
           # 删除临时文件
           Remove-Item requirements-windows.txt
