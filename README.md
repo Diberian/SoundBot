@@ -12,21 +12,21 @@
 
 ## 📥 下载 / Download
 
-**最新版本 / Latest Release**: [v0.1.1-alpha](https://github.com/Huckrick/SoundBot/releases/tag/v0.1.1-alpha)
+**最新版本 / Latest Release**: [v0.1.1](https://github.com/Huckrick/SoundBot/releases/tag/v0.1.1)
 
 ### 🆕 新架构：分离式发布 / New Architecture: Split Release
 
-从 v0.1.1-alpha 开始，SoundBot 采用**分离式架构**，将应用包、AI 模型和 Python 环境分开发布：
+从 v0.1.1 开始，SoundBot 采用**分离式架构**，将应用包、AI 模型和 Python 环境分开发布：
 
-Starting from v0.1.1-alpha, SoundBot adopts a **split architecture**, separating the app package, AI models, and Python environment:
+Starting from v0.1.1, SoundBot adopts a **split architecture**, separating the app package, AI models, and Python environment:
 
 ### 应用包 / App Packages
 
 | 平台 / Platform | 下载链接 / Download | 大小 / Size |
 |----------------|--------------------|-------------|
-| **macOS (Intel)** | [📥 SoundBot-0.1.1-alpha.dmg](https://github.com/Huckrick/SoundBot/releases/download/v0.1.1-alpha/SoundBot-0.1.1-alpha.dmg) | ~100MB |
-| **macOS (Apple Silicon)** | [📥 SoundBot-0.1.1-alpha-arm64.dmg](https://github.com/Huckrick/SoundBot/releases/download/v0.1.1-alpha/SoundBot-0.1.1-alpha-arm64.dmg) | ~100MB |
-| **Windows** | [📥 SoundBot-Setup-0.1.1-alpha.exe](https://github.com/Huckrick/SoundBot/releases/download/v0.1.1-alpha/SoundBot-Setup-0.1.1-alpha.exe) | ~100MB |
+| **macOS (Intel)** | [📥 SoundBot-0.1.1-alpha.dmg](https://github.com/Huckrick/SoundBot/releases/download/v0.1.1/SoundBot-0.1.1-alpha.dmg) | ~100MB |
+| **macOS (Apple Silicon)** | [📥 SoundBot-0.1.1-alpha-arm64.dmg](https://github.com/Huckrick/SoundBot/releases/download/v0.1.1/SoundBot-0.1.1-alpha-arm64.dmg) | ~100MB |
+| **Windows** | [📥 SoundBot-Setup-0.1.1-alpha.exe](https://github.com/Huckrick/SoundBot/releases/download/v0.1.1/SoundBot-Setup-0.1.1-alpha.exe) | ~100MB |
 
 ### 资源文件 / Resources
 
@@ -34,9 +34,9 @@ Starting from v0.1.1-alpha, SoundBot adopts a **split architecture**, separating
 
 | 资源 / Resource | 下载链接 / Download | 大小 / Size | 说明 / Description |
 |----------------|--------------------|-------------|-------------------|
-| **AI 模型 / Models** | [📦 models.zip](https://github.com/Huckrick/SoundBot/releases/download/v0.1.1-alpha/models.zip) | ~500MB-1GB | **所有平台通用 / All platforms** |
-| **macOS 环境** | [📦 venv-macos.zip](https://github.com/Huckrick/SoundBot/releases/download/v0.1.1-alpha/venv-macos.zip) | ~1-2GB | macOS Python 虚拟环境 |
-| **Windows 环境** | [📦 venv-windows.zip](https://github.com/Huckrick/SoundBot/releases/download/v0.1.1-alpha/venv-windows.zip) | ~1-2GB | Windows Python 虚拟环境 |
+| **AI 模型 / Models** | [📦 models.zip](https://github.com/Huckrick/SoundBot/releases/download/v0.1.1/models.zip) | ~500MB-1GB | **所有平台通用 / All platforms** |
+| **macOS 环境** | [📦 venv-macos.zip](https://github.com/Huckrick/SoundBot/releases/download/v0.1.1/venv-macos.zip) | ~1-2GB | macOS Python 虚拟环境 |
+| **Windows 环境** | [📦 venv-windows.zip](https://github.com/Huckrick/SoundBot/releases/download/v0.1.1/venv-windows.zip) | ~1-2GB | Windows Python 虚拟环境 |
 
 ### 界面预览 / Screenshot
 
