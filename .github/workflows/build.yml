@@ -131,8 +131,12 @@ jobs:
           pip install --upgrade pip
           # 先安装 PyTorch（Windows 需要特殊处理）
           pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cpu
-          # 安装其他依赖，排除 uvloop（不支持 Windows）
-          Get-Content requirements.txt | Where-Object { $_ -notmatch "^uvloop" } | ForEach-Object { pip install $_ }
+          # 创建临时 requirements 文件，排除 uvloop（不支持 Windows）
+          Get-Content requirements.txt | Where-Object { $_ -notmatch "^uvloop" -and $_ -match "\S" } | Set-Content requirements-windows.txt
+          # 安装其他依赖
+          pip install -r requirements-windows.txt
+          # 删除临时文件
+          Remove-Item requirements-windows.txt
 
       - name: Create Windows venv package
         shell: pwsh
