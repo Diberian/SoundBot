@@ -55,6 +55,10 @@ jobs:
           cd ..
           python scripts/download_models.py
 
+      - name: Fix venv for packaging
+        run: |
+          python scripts/fix_venv_for_packaging.py
+
       - name: Check package size
         run: |
           echo "Backend size:"
@@ -118,6 +122,11 @@ jobs:
           python scripts/download_models.py
         env:
           PYTHONIOENCODING: utf-8
+
+      - name: Fix venv for packaging
+        shell: pwsh
+        run: |
+          python scripts/fix_venv_for_packaging.py
 
       - name: Check package size
         shell: pwsh
