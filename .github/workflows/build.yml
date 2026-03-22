@@ -63,6 +63,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Check macOS build size
+        run: |
+          echo "=== macOS Build Size ==="
+          ls -lh dist/
+          du -sh dist/
+
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
@@ -121,6 +127,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Check Windows build size
+        run: |
+          echo "=== Windows Build Size ==="
+          ls -lh dist/
+          du -sh dist/
+
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
@@ -147,6 +159,14 @@ jobs:
           echo "Downloaded artifacts:"
           ls -la artifacts/
           find artifacts/ -type f -name "*"
+
+      - name: Check artifact sizes
+        run: |
+          echo "=== Artifact Sizes ==="
+          find artifacts/ -type f -exec ls -lh {} \;
+          echo ""
+          echo "Total size per platform:"
+          du -sh artifacts/*
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
