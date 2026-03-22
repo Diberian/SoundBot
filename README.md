@@ -64,14 +64,30 @@ Starting from v0.1.1, SoundBot adopts a **split architecture**, separating the a
    - 下载 `venv-macos.zip`
 
 4. **解压资源文件** / Extract resources
-   ```bash
-   # 方法 1：解压到应用包内（推荐）
-   cd /Applications/SoundBot.app/Contents/MacOS
-   unzip ~/Downloads/models.zip
-   unzip ~/Downloads/venv-macos.zip
    
-   # 方法 2：解压到应用同级目录（便于管理）
-   cd /Applications
+   **重要：解压位置 / Important: Extraction Location**
+   
+   venv-macos.zip 解压后应该得到 `backend/venv/` 目录结构：
+   The venv-macos.zip should extract to `backend/venv/` directory structure:
+   
+   ```bash
+   # 方法 1：解压到应用包内（推荐 / Recommended）
+   cd /Applications/SoundBot.app/Contents/MacOS
+   unzip ~/Downloads/models.zip                    # 得到 models/ 文件夹
+   unzip ~/Downloads/venv-macos.zip                # 得到 backend/venv/ 文件夹
+   
+   # 最终结构 / Final structure:
+   # SoundBot.app/Contents/MacOS/
+   # ├── backend/
+   # │   ├── main.py
+   # │   ├── core/
+   # │   └── venv/          ← Python 虚拟环境 / Python virtual environment
+   # ├── models/            ← AI 模型 / AI models
+   # │   └── clap/
+   # └── ...
+   
+   # 方法 2：解压到应用同级目录（便于管理 / Easier to manage）
+   cd /Applications/SoundBot.app/Contents
    unzip ~/Downloads/models.zip
    unzip ~/Downloads/venv-macos.zip
    ```
@@ -94,20 +110,38 @@ Starting from v0.1.1, SoundBot adopts a **split architecture**, separating the a
    - 下载 `venv-windows.zip`
 
 4. **解压资源文件** / Extract resources
-   - 将 `models.zip` 解压到 SoundBot 安装目录，得到 `models` 文件夹
-   - 将 `venv-windows.zip` 解压到 SoundBot 安装目录，得到 `backend\venv` 文件夹
-   - 最终目录结构：
+   
+   **重要：解压位置 / Important: Extraction Location**
+   
+   将资源文件解压到 SoundBot 安装目录：
+   Extract resource files to the SoundBot installation directory:
+   
+   - **默认安装路径 / Default install path**: 
+     - Windows: `C:\Users\<YourUsername>\AppData\Local\Programs\SoundBot`
+   
+   - 解压 `models.zip` → 得到 `models/` 文件夹 / Get `models/` folder
+   - 解压 `venv-windows.zip` → 得到 `backend/venv/` 文件夹 / Get `backend/venv/` folder
+   
+   - **最终目录结构 / Final directory structure**:
      ```
      SoundBot/
-     ├── SoundBot.exe
+     ├── SoundBot.exe          ← 主程序 / Main application
      ├── backend/
      │   ├── main.py
      │   ├── core/
-     │   └── venv/          # 从 venv-windows.zip 解压
-     ├── models/            # 从 models.zip 解压
+     │   └── venv/             ← Python 虚拟环境 / Python virtual environment
+     │       ├── Scripts/
+     │       ├── Lib/
+     │       └── ...
+     ├── models/               ← AI 模型 / AI models
      │   └── clap/
+     │       └── ...
      └── ...
      ```
+   
+   **注意 / Note**: 
+   - `venv-windows.zip` 已经包含 `backend/` 路径，直接解压即可
+   - `venv-windows.zip` already includes the `backend/` path, just extract directly
 
 5. **启动应用** / Launch
    - 双击 SoundBot 图标启动
