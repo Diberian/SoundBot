@@ -1,6 +1,6 @@
 {
   "name": "soundbot-electron",
-  "version": "0.1.0-alpha",
+  "version": "0.1.2-alpha",
   "description": "SoundBot - AI 音效管理器桌面版",
   "main": "main.js",
   "scripts": {
@@ -48,7 +48,13 @@
       {
         "from": "backend",
         "to": "backend",
-        "filter": ["!__pycache__", "!db/*.db", "!**/*.pyc"]
+        "filter": [
+          "!__pycache__",
+          "!db/*.db",
+          "!**/*.pyc",
+          "!venv/**/*",
+          "!**/__pycache__/**/*"
+        ]
       },
       {
         "from": "models",

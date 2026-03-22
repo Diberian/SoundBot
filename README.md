@@ -1,7 +1,7 @@
 🎵 SoundBot - AI 音效管理器 / AI Sound Effect Manager
 
 [!\[License: GPL v3\](https://img.shields.io/badge/License-GPLv3-blue.svg null)](https://www.gnu.org/licenses/gpl-3.0)
-[!\[Version\](https://img.shields.io/badge/version-0.1.0--alpha-orange.svg null)](https://github.com/Huckrick/SoundBot)
+[!\[Version\](https://img.shields.io/badge/version-0.1.2--alpha-orange.svg null)](https://github.com/Huckrick/SoundBot)
 [!\[Python\](https://img.shields.io/badge/python-3.12-blue.svg null)](https://www.python.org/)
 [!\[Electron\](https://img.shields.io/badge/electron-28.x-9feaf9.svg null)](https://www.electronjs.org/)
 
@@ -15,7 +15,7 @@
 [!\[Download for macOS\](https://img.shields.io/badge/Download-macOS-blue.svg null)](https://github.com/Huckrick/SoundBot/releases/latest)\
 [!\[Download for Windows\](https://img.shields.io/badge/Download-Windows-blue.svg null)](https://github.com/Huckrick/SoundBot/releases/latest)
 
-**最新版本 / Latest Release**: [v0.1.0-alpha](https://github.com/Huckrick/SoundBot/releases/latest)
+**最新版本 / Latest Release**: [v0.1.2-alpha](https://github.com/Huckrick/SoundBot/releases/latest)
 
 ### 界面预览 / Screenshot
 
