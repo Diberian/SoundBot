@@ -39,40 +39,24 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
-      - name: Install PyInstaller and dependencies
+      - name: Setup Python virtual environment
         run: |
+          cd backend
+          python -m venv venv
+          source venv/bin/activate
           pip install --upgrade pip
-          pip install pyinstaller
-          pip install -r backend/requirements.txt
+          pip install -r requirements.txt
           echo "Python dependencies installed:"
           pip list | head -20
 
       - name: Download AI models
         run: |
+          cd backend
+          source venv/bin/activate
+          cd ..
           python scripts/download_models.py
         env:
           PYTHONIOENCODING: utf-8
-
-      - name: Build backend with PyInstaller
-        run: |
-          cd backend
-          pyinstaller main.spec --clean
-          echo "Backend executable built:"
-          ls -la dist/
-
-      - name: Check backend executable
-        run: |
-          echo "Backend executable location:"
-          ls -la backend/dist/
-          echo "Backend executable size:"
-          ls -lh backend/dist/SoundBot-backend
-
-      - name: Check package size
-        run: |
-          echo "Backend executable size:"
-          ls -lh backend/dist/SoundBot-backend
-          echo "Models size:"
-          du -sh models/
 
       - name: Build macOS
         run: npm run build:mac
@@ -111,45 +95,26 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
-      - name: Install PyInstaller and dependencies
+      - name: Setup Python virtual environment
         shell: pwsh
         run: |
+          cd backend
+          python -m venv venv
+          .\venv\Scripts\Activate.ps1
           pip install --upgrade pip
-          pip install pyinstaller
-          pip install -r backend/requirements.txt
+          pip install -r requirements.txt
           echo "Python dependencies installed:"
           pip list | Select-Object -First 20
 
       - name: Download AI models
         shell: pwsh
         run: |
+          cd backend
+          .\venv\Scripts\Activate.ps1
+          cd ..
           python scripts/download_models.py
         env:
           PYTHONIOENCODING: utf-8
-
-      - name: Build backend with PyInstaller
-        shell: pwsh
-        run: |
-          cd backend
-          pyinstaller main.spec --clean
-          echo "Backend executable built:"
-          Get-ChildItem dist/
-
-      - name: Check backend executable
-        shell: pwsh
-        run: |
-          Write-Host "Backend executable location:"
-          Get-ChildItem backend/dist/
-          Write-Host "Backend executable size:"
-          Get-ChildItem backend/dist/SoundBot-backend.exe | Select-Object Length
-
-      - name: Check package size
-        shell: pwsh
-        run: |
-          Write-Host "Backend executable size:"
-          Get-ChildItem backend/dist/SoundBot-backend.exe | Select-Object Length
-          Write-Host "Models size:"
-          Get-ChildItem models/ -Recurse | Measure-Object -Property Length -Sum | Select-Object Sum
 
       - name: Build Windows
         run: npm run build:win

@@ -897,16 +897,8 @@ async function startBackendServer() {
       console.log(`[Backend] CLAP模型存在: ${fs.existsSync(path.join(modelsPath, 'clap'))}`);
 
       // 检查后端文件是否存在
-      // 检查是否存在 PyInstaller 打包的可执行文件
-      const exeName = process.platform === 'win32' ? 'SoundBot-backend.exe' : 'SoundBot-backend';
-      const backendExe = path.join(backendPath, exeName);
-      const usePyInstaller = fs.existsSync(backendExe);
-
-      if (usePyInstaller) {
-        // 使用 PyInstaller 打包的可执行文件
-        console.log(`[Backend] 使用 PyInstaller 可执行文件: ${backendExe}`);
-      } else if (!fs.existsSync(mainPy)) {
-        console.error('[Backend] 错误: 后端文件不存在');
+      if (!fs.existsSync(mainPy)) {
+        console.error('[Backend] 错误: main.py 不存在');
         console.error('[Backend] 尝试过的路径:', getBackendPath());
         return { success: false, error: '后端文件不存在' };
       }
@@ -928,41 +920,35 @@ async function startBackendServer() {
       };
       console.log(`[Backend] 环境变量 SOUNDBOT_MODELS_PATH: ${envVars.SOUNDBOT_MODELS_PATH}`);
 
+      // 优先使用 backend/venv 中的 Python 解释器
+      let pythonCmd = 'python';
+      const venvPython = path.join(backendPath, 'venv', 'bin', 'python');
+      const venvPython3 = path.join(backendPath, 'venv', 'bin', 'python3');
+      const venvPythonWin = path.join(backendPath, 'venv', 'Scripts', 'python.exe');
+
+      if (fs.existsSync(venvPython)) {
+        pythonCmd = venvPython;
+      } else if (fs.existsSync(venvPython3)) {
+        pythonCmd = venvPython3;
+      } else if (fs.existsSync(venvPythonWin)) {
+        pythonCmd = venvPythonWin;
+      } else {
+        pythonCmd = 'python3';
+      }
+
+      console.log(`[Backend] 使用 Python: ${pythonCmd}`);
+
       // 启动后端进程
       console.log(`[Backend] 启动参数:`);
       console.log(`[Backend]   cwd: ${backendPath}`);
       console.log(`[Backend]   env.SOUNDBOT_MODELS_PATH: ${envVars.SOUNDBOT_MODELS_PATH}`);
-
-      if (usePyInstaller) {
-        // 使用 PyInstaller 可执行文件
-        console.log(`[Backend]   cmd: ${backendExe}`);
-        backendProcess = spawn(backendExe, [], {
-          cwd: backendPath,
-          env: envVars,
-        });
-      } else {
-        // 回退到 Python 解释器模式
-        let pythonCmd = 'python';
-        const venvPython = path.join(backendPath, 'venv', 'bin', 'python');
-        const venvPython3 = path.join(backendPath, 'venv', 'bin', 'python3');
-
-        if (fs.existsSync(venvPython)) {
-          pythonCmd = venvPython;
-        } else if (fs.existsSync(venvPython3)) {
-          pythonCmd = venvPython3;
-        } else {
-          pythonCmd = 'python3';
-        }
-
-        console.log(`[Backend] 使用 Python: ${pythonCmd}`);
-        console.log(`[Backend]   cmd: ${pythonCmd} ${mainPy}`);
-        
-        backendProcess = spawn(pythonCmd, [mainPy], {
-          cwd: backendPath,
-          env: envVars,
-          stdio: ['pipe', 'pipe', 'pipe']
-        });
-      }
+      console.log(`[Backend]   cmd: ${pythonCmd} ${mainPy}`);
+      
+      backendProcess = spawn(pythonCmd, [mainPy], {
+        cwd: backendPath,
+        env: envVars,
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
 
       // 收集启动日志
       let startupOutput = '';

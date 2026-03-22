@@ -1,6 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-PyInstaller spec file for SoundBot backend
+PyInstaller spec file for SoundBot backend (lightweight version)
+Excludes large dependencies (torch, transformers) - they are provided via venv
 """
 
 import sys
@@ -9,12 +10,12 @@ from pathlib import Path
 
 block_cipher = None
 
-# 获取项目根目录（spec 文件所在目录的父目录）
+# 获取项目根目录
 spec_dir = Path(os.getcwd())
 backend_dir = spec_dir
 project_root = backend_dir.parent
 
-# 添加数据文件
+# 添加数据文件（只包含代码，不包含大依赖）
 datas = []
 
 # 添加 core 目录
@@ -34,12 +35,7 @@ for py_file in ['database.py', 'reindex_folder.py', 'reset_and_reindex.py']:
     if (backend_dir / py_file).exists():
         datas.append((str(backend_dir / py_file), '.'))
 
-# 添加模型文件（如果存在）
-models_dir = project_root / 'models'
-if models_dir.exists():
-    datas.append((str(models_dir), 'models'))
-
-# 隐藏导入（PyInstaller 自动检测不到的依赖）
+# 隐藏导入（只包含轻量级依赖）
 hiddenimports = [
     'uvicorn.logging',
     'uvicorn.loops',
@@ -52,13 +48,22 @@ hiddenimports = [
     'fastapi.middleware.cors',
     'chromadb',
     'chromadb.config',
-    'transformers',
-    'torch',
-    'torchaudio',
-    'numpy',
-    'soundfile',
     'pydantic',
     'pydantic_settings',
+    # 注意：torch, transformers, numpy 等大依赖通过 venv 提供
+]
+
+# 排除大依赖（这些将通过 venv 提供）
+excludes = [
+    'torch',
+    'torchaudio',
+    'transformers',
+    'numpy',
+    'scipy',
+    'pandas',
+    'matplotlib',
+    'PIL',
+    'cv2',
 ]
 
 a = Analysis(
@@ -70,7 +75,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=excludes,
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
@@ -93,19 +98,10 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=True,  # 显示控制台窗口用于调试
+    console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
 )
-
-# macOS 单文件模式
-if sys.platform == 'darwin':
-    app = BUNDLE(
-        exe,
-        name='SoundBot-backend.app',
-        icon=None,
-        bundle_identifier='com.nagisahuckrick.soundbot.backend',
-    )
