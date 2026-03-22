@@ -4,16 +4,7 @@ on:
   push:
     tags:
       - 'v*'
-      - '[0-9]+.*'
   workflow_dispatch:
-
-permissions:
-  contents: write
-  actions: read
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  PYTHONIOENCODING: utf-8
 
 jobs:
   # 构建模型包（跨平台共享）
@@ -95,7 +86,7 @@ jobs:
           echo "=== Creating macOS venv package ==="
           mkdir -p release
           cd backend
-          zip -r ../release/venv-macos.zip venv
+          zip -r ../release/venv-macos.zip venv/
           cd ..
           echo "macOS venv package created:"
           ls -lh release/
@@ -130,19 +121,9 @@ jobs:
           .\venv\Scripts\Activate.ps1
           pip install --upgrade pip
           # 安装依赖，但排除 uvloop（Windows 不支持）
-          # 使用 Python 脚本解析 requirements.txt
-          $pyScript = @'
-import re
-with open("requirements.txt", "r") as f:
-    lines = f.readlines()
-with open("requirements-windows.txt", "w") as f:
-    for line in lines:
-        if not re.match(r"^\s*(uvloop|#)", line) and line.strip():
-            f.write(line)
-print("Created requirements-windows.txt")
-'@
-          $pyScript | python
-          Write-Host "=== Filtered requirements (first 20 lines) ==="
+          # 先创建过滤后的 requirements 文件
+          (Get-Content requirements.txt) | Where-Object { $_ -notmatch 'uvloop' -and $_ -match '\S' } | Set-Content requirements-windows.txt
+          Write-Host "=== Filtered requirements ==="
           Get-Content requirements-windows.txt | Select-Object -First 20
           # 安装过滤后的依赖
           pip install -r requirements-windows.txt
@@ -162,7 +143,7 @@ print("Created requirements-windows.txt")
         uses: actions/upload-artifact@v4
         with:
           name: venv-windows-package
-          path: release/venv-windows.zip
+          path: release\venv-windows.zip
           if-no-files-found: error
 
   # 构建 macOS 应用（轻量级，不包含模型和venv）
@@ -275,90 +256,17 @@ print("Created requirements-windows.txt")
 
       - name: List artifacts
         run: |
-          echo "=== All Artifacts ==="
-          find artifacts/ -type f | while read f; do
-            size=$(ls -lh "$f" | awk '{print $5}')
-            echo "$f - $size"
-          done
+          echo "=== Downloaded artifacts ==="
+          find artifacts -type f -name "*.zip" -o -name "*.dmg" -o -name "*.exe" | head -20
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            artifacts/models-package/models.zip
-            artifacts/venv-macos-package/venv-macos.zip
-            artifacts/venv-windows-package/venv-windows.zip
-            artifacts/SoundBot-macOS-app/*.dmg
-            artifacts/SoundBot-macOS-app/*.zip
-            artifacts/SoundBot-Windows-app/*.exe
-            artifacts/SoundBot-Windows-app/*.msi
+            artifacts/**/*.zip
+            artifacts/**/*.dmg
+            artifacts/**/*.exe
           draft: false
           prerelease: true
-          body: |
-            ## SoundBot 新版本发布
-
-            ### 安装说明
-
-            本次发布采用**分离式架构**，应用包、模型和 Python 环境分开下载：
-
-            #### 1. 下载应用包
-            - **macOS**: `SoundBot-x.x.x.dmg` 或 `SoundBot-x.x.x-mac.zip`
-            - **Windows**: `SoundBot Setup x.x.x.exe` 或 `SoundBot-x.x.x-win.zip`
-
-            #### 2. 下载资源文件（必需）
-            根据你的平台下载对应的资源文件：
-
-            | 资源 | 文件名 | 说明 |
-            |------|--------|------|
-            | AI 模型 | `models.zip` | **所有平台通用**，包含 CLAP 模型 |
-            | macOS 环境 | `venv-macos.zip` | macOS Python 虚拟环境 |
-            | Windows 环境 | `venv-windows.zip` | Windows Python 虚拟环境 |
-
-            #### 3. 安装步骤
-
-            **macOS:**
-            ```bash
-            # 1. 安装应用
-            # 打开 DMG 文件，将 SoundBot 拖到 Applications 文件夹
-
-            # 2. 解压资源文件到应用目录
-            cd /Applications/SoundBot.app/Contents/MacOS
-            unzip ~/Downloads/models.zip
-            unzip ~/Downloads/venv-macos.zip
-            ```
-
-            **Windows:**
-            ```powershell
-            # 1. 安装应用
-            # 运行 SoundBot Setup x.x.x.exe
-
-            # 2. 解压资源文件到应用目录
-            # 将 models.zip 和 venv-windows.zip 解压到 SoundBot 安装目录
-            # 默认路径: C:\Users\<用户名>\AppData\Local\Programs\SoundBot
-            ```
-
-            #### 4. 自动下载（可选）
-            应用启动时会自动检测资源，如果缺失会提示你从 Releases 页面下载。
-
-            ### 文件说明
-
-            - **应用包** (~50-100MB): 只包含 Electron 前端和 Python 后端代码
-            - **models.zip** (~500MB-1GB): AI 模型文件，所有平台共用
-            - **venv-*.zip** (~1-2GB): Python 虚拟环境，包含所有依赖
-
-            ### 更新说明
-
-            - **应用更新**: 直接下载新的应用包覆盖安装，无需重新下载模型和 venv
-            - **模型更新**: 如果新版本需要更新模型，会单独发布新的 models.zip
-            - **环境更新**: 如果依赖有变化，会单独发布新的 venv-*.zip
-
-            ### 手动配置下载源
-
-            如果需要从其他仓库下载资源，可以创建 `download_config.json`:
-            ```json
-            {
-              "github_repo": "Huckrick/SoundBot"
-            }
-            ```
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
