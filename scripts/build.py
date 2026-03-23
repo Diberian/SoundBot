@@ -47,9 +47,19 @@ def log(message: str, level: str = "INFO"):
 def run_command(cmd: list, cwd: Path = None, env: dict = None) -> subprocess.CompletedProcess:
     """执行命令并检查返回值"""
     log(f"执行: {' '.join(str(c) for c in cmd)}")
-    result = subprocess.run(cmd, cwd=cwd, env=env, capture_output=False)
+    result = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True)
     if result.returncode != 0:
+        log("=" * 60, "ERROR")
+        log("命令 stdout:", "ERROR")
+        log(result.stdout, "ERROR")
+        log("命令 stderr:", "ERROR")
+        log(result.stderr, "ERROR")
+        log("=" * 60, "ERROR")
         raise RuntimeError(f"命令失败: {' '.join(str(c) for c in cmd)}")
+    if result.stdout:
+        print(result.stdout)
+    if result.stderr:
+        print(result.stderr, file=sys.stderr)
     return result
 
 
