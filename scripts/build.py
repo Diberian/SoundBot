@@ -181,7 +181,7 @@ def build_electron(target_platform: str = None):
         run_command(["npm", "run", "build:mac"], cwd=PROJECT_ROOT)
     elif target_platform == "windows" or (target_platform is None and platform.system() == "Windows"):
         log("构建 Windows 应用...")
-        run_command(["npm", "run", "build:win"], cwd=PROJECTRON_ROOT)
+        run_command(["npm", "run", "build:win"], cwd=PROJECT_ROOT)
     elif target_platform == "linux":
         log("构建 Linux 应用...")
         run_command(["npm", "run", "build:linux"], cwd=PROJECT_ROOT)
