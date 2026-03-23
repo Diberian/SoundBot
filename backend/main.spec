@@ -9,7 +9,8 @@ import os
 from pathlib import Path
 
 # 获取当前 spec 文件所在目录
-spec_file = Path(os.path.abspath(SPECFILE))
+# 使用 sys.argv[0] 获取 spec 文件路径
+spec_file = Path(os.path.abspath(sys.argv[0]))
 spec_dir = spec_file.parent
 backend_dir = spec_dir
 project_root = backend_dir.parent
