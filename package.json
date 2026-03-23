@@ -62,7 +62,7 @@
     ],
     "extraResources": [
       {
-        "from": "backend/dist/backend",
+        "from": "dist/backend",
         "to": "backend",
         "filter": [
           "soundbot-backend*",
@@ -71,7 +71,8 @@
           "*.dylib",
           "*.pyd",
           "base_library.zip",
-          "lib-dynload/**"
+          "lib-dynload/**",
+          "_internal/**"
         ]
       }
     ],
