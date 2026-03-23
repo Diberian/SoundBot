@@ -1,4 +1,4 @@
-name: Build and Release
+name: Build and Release (PyInstaller Version)
 
 on:
   push:
@@ -22,19 +22,12 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Setup Python virtual environment
+      - name: Install dependencies
         run: |
-          cd backend
-          python -m venv venv
-          source venv/bin/activate
-          pip install --upgrade pip
-          pip install transformers torch torchaudio
+          pip install transformers torch torchaudio huggingface_hub
 
       - name: Download AI models
         run: |
-          cd backend
-          source venv/bin/activate
-          cd ..
           python scripts/download_models.py
         env:
           PYTHONIOENCODING: utf-8
@@ -44,22 +37,20 @@ jobs:
           echo "=== Creating Models package ==="
           mkdir -p release
           cd models
-          zip -r ../release/models.zip .
+          zip -r ../release/models-${GITHUB_REF_NAME}.zip .
           cd ..
           echo "Models package created:"
           ls -lh release/
-          echo "=== Package contents ==="
-          unzip -l release/models.zip | head -20
 
       - name: Upload Models artifact
         uses: actions/upload-artifact@v4
         with:
           name: models-package
-          path: release/models.zip
+          path: release/models-*.zip
           if-no-files-found: error
 
-  # 构建 macOS venv 包
-  build-venv-macos:
+  # 构建 macOS 应用（PyInstaller + Electron）
+  build-macos:
     runs-on: macos-latest
     permissions:
       contents: read
@@ -73,88 +64,20 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Setup Python virtual environment
+      - name: Install Python dependencies
+        run: |
+          pip install pyinstaller
+          pip install -r backend/requirements.txt
+
+      - name: Build PyInstaller backend
         run: |
           cd backend
-          python -m venv venv
-          source venv/bin/activate
-          pip install --upgrade pip
-          pip install -r requirements.txt
+          pyinstaller main.spec --distpath ../dist/backend --workpath ../dist/build
 
-      - name: Create macOS venv package
+      - name: Check backend size
         run: |
-          echo "=== Creating macOS venv package ==="
-          mkdir -p release
-          cd backend
-          zip -r ../release/venv-macos.zip venv/
-          cd ..
-          echo "macOS venv package created:"
-          ls -lh release/
-
-      - name: Upload macOS venv artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: venv-macos-package
-          path: release/venv-macos.zip
-          if-no-files-found: error
-
-  # 构建 Windows venv 包
-  build-venv-windows:
-    runs-on: windows-latest
-    permissions:
-      contents: read
-      actions: read
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Setup Python virtual environment
-        shell: pwsh
-        run: |
-          cd backend
-          python -m venv venv
-          .\venv\Scripts\Activate.ps1
-          pip install --upgrade pip
-          # 安装依赖，但排除 uvloop（Windows 不支持）
-          # 先创建过滤后的 requirements 文件
-          (Get-Content requirements.txt) | Where-Object { $_ -notmatch 'uvloop' -and $_ -match '\S' } | Set-Content requirements-windows.txt
-          Write-Host "=== Filtered requirements ==="
-          Get-Content requirements-windows.txt | Select-Object -First 20
-          # 安装过滤后的依赖
-          pip install -r requirements-windows.txt
-          # 删除临时文件
-          Remove-Item requirements-windows.txt
-
-      - name: Create Windows venv package
-        shell: pwsh
-        run: |
-          echo "=== Creating Windows venv package ==="
-          New-Item -ItemType Directory -Force -Path release | Out-Null
-          Compress-Archive -Path backend\venv -DestinationPath release\venv-windows.zip -Force
-          Write-Host "Windows venv package created:"
-          Get-ChildItem release/ | Format-Table Name, Length
-
-      - name: Upload Windows venv artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: venv-windows-package
-          path: release\venv-windows.zip
-          if-no-files-found: error
-
-  # 构建 macOS 应用（轻量级，不包含模型和venv）
-  build-macos-app:
-    runs-on: macos-latest
-    permissions:
-      contents: read
-      actions: read
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+          ls -lh dist/backend/soundbot-backend
+          du -sh dist/backend/
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -165,37 +88,25 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
-      - name: Build macOS
+      - name: Build Electron (macOS)
         run: npm run build:mac
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Check macOS build size
+      - name: Check build size
         run: |
-          echo "=== macOS Build Size ==="
-          ls -lh dist/
+          echo "=== Build Size ==="
+          ls -lh dist-electron/
 
-      - name: List packaged files
-        run: |
-          echo "=== Checking app bundle contents ==="
-          if [ -d "dist/mac/SoundBot.app/Contents/Resources/app" ]; then
-            ls -la "dist/mac/SoundBot.app/Contents/Resources/app/"
-          fi
-          if [ -d "dist/mac-arm64/SoundBot.app/Contents/Resources/app" ]; then
-            ls -la "dist/mac-arm64/SoundBot.app/Contents/Resources/app/"
-          fi
-
-      - name: Upload macOS app artifact
+      - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SoundBot-macOS-app
-          path: |
-            dist/*.dmg
-            dist/*.zip
-          if-no-files-found: warn
+          name: soundbot-macos
+          path: dist-electron/*.dmg
+          if-no-files-found: error
 
-  # 构建 Windows 应用（轻量级，不包含模型和venv）
-  build-windows-app:
+  # 构建 Windows 应用（PyInstaller + Electron）
+  build-windows:
     runs-on: windows-latest
     permissions:
       contents: read
@@ -203,6 +114,32 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        shell: pwsh
+        run: |
+          pip install pyinstaller
+          # Windows 不需要 uvloop
+          (Get-Content backend/requirements.txt) | Where-Object { $_ -notmatch 'uvloop' -and $_ -match '\S' } | Set-Content requirements-filtered.txt
+          pip install -r requirements-filtered.txt
+          Remove-Item requirements-filtered.txt
+
+      - name: Build PyInstaller backend
+        shell: pwsh
+        run: |
+          cd backend
+          pyinstaller main.spec --distpath ../dist/backend --workpath ../dist/build
+
+      - name: Check backend size
+        shell: pwsh
+        run: |
+          Get-ChildItem dist/backend/soundbot-backend.exe | Select-Object Name, @{Name="SizeMB";Expression={[math]::Round($_.Length/1MB,2)}}
+          (Get-ChildItem dist/backend -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -213,37 +150,26 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
-      - name: Build Windows
+      - name: Build Electron (Windows)
         run: npm run build:win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Check Windows build size
+      - name: Check build size
         shell: pwsh
         run: |
-          echo "=== Windows Build Size ==="
-          Get-ChildItem dist/ | ForEach-Object { Write-Host "$($_.Name) - $([math]::Round($_.Length/1MB, 2)) MB" }
+          Get-ChildItem dist-electron/ | ForEach-Object { Write-Host "$($_.Name) - $([math]::Round($_.Length/1MB, 2)) MB" }
 
-      - name: List packaged files
-        shell: pwsh
-        run: |
-          echo "=== Checking app bundle contents ==="
-          if (Test-Path "dist/win-unpacked/resources/app") {
-            Get-ChildItem "dist/win-unpacked/resources/app" -Depth 1
-          }
-
-      - name: Upload Windows app artifact
+      - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SoundBot-Windows-app
-          path: |
-            dist/*.exe
-            dist/*.msi
-          if-no-files-found: warn
+          name: soundbot-windows
+          path: dist-electron/*.exe
+          if-no-files-found: error
 
   # 发布 Release
   release:
-    needs: [build-models, build-venv-macos, build-venv-windows, build-macos-app, build-windows-app]
+    needs: [build-models, build-macos, build-windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -257,7 +183,7 @@ jobs:
       - name: List artifacts
         run: |
           echo "=== Downloaded artifacts ==="
-          find artifacts -type f -name "*.zip" -o -name "*.dmg" -o -name "*.exe" | head -20
+          find artifacts -type f \( -name "*.zip" -o -name "*.dmg" -o -name "*.exe" \) | sort
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -267,6 +193,7 @@ jobs:
             artifacts/**/*.dmg
             artifacts/**/*.exe
           draft: false
-          prerelease: true
+          prerelease: false
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

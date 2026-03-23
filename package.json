@@ -1,23 +1,29 @@
 {
-  "name": "soundbot-electron",
-  "version": "0.1.1-alpha",
-  "description": "SoundBot - AI 音效管理器桌面版",
+  "name": "soundbot",
+  "version": "0.1.2",
+  "description": "SoundBot - AI 音效管理器桌面版 (PyInstaller 一体化版本)",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "build": "electron-builder",
-    "build:mac": "electron-builder --mac",
-    "build:win": "electron-builder --win",
-    "build:linux": "electron-builder --linux",
+    "build": "python scripts/build.py",
+    "build:mac": "python scripts/build.py --platform macos",
+    "build:win": "python scripts/build.py --platform windows",
+    "build:all": "python scripts/build.py --platform all",
     "pack": "electron-builder --dir",
     "postinstall": "electron-builder install-app-deps",
-    "download:models": "python scripts/download_manager.py download models",
-    "download:venv": "python scripts/download_manager.py download venv",
-    "download:all": "python scripts/download_manager.py download all",
-    "setup": "python scripts/download_manager.py setup"
+    "clean": "rm -rf dist backend/dist backend/build"
   },
-  "keywords": ["electron", "audio", "sound", "manager", "ai", "semantic-search", "clap"],
+  "keywords": [
+    "electron",
+    "audio",
+    "sound",
+    "manager",
+    "ai",
+    "semantic-search",
+    "clap",
+    "pyinstaller"
+  ],
   "author": "Nagisa_Huckrick (胡杨) <Nagisa_Huckrick@yeah.net>",
   "license": "GPL-3.0",
   "devDependencies": {
@@ -29,7 +35,7 @@
     "productName": "SoundBot",
     "copyright": "Copyright © 2026 Nagisa_Huckrick (胡杨)",
     "directories": {
-      "output": "dist",
+      "output": "dist-electron",
       "buildResources": "build"
     },
     "files": [
@@ -42,27 +48,29 @@
       "wavesurfer.regions.min.js",
       "assets/**/*",
       "config/**/*",
-      "scripts/download_manager.py",
-      "download_config.json",
-      "!backend/__pycache__",
-      "!backend/db/*.db",
-      "!backend/**/*.pyc",
-      "!backend/venv/**",
-      "!backend/models/**",
-      "!models/**",
-      "!downloads/**"
+      "!backend/**",
+      "!scripts/**",
+      "!**/*.pyc",
+      "!**/__pycache__",
+      "!**/*.spec",
+      "!**/dist",
+      "!**/build",
+      "!**/venv",
+      "!**/models",
+      "!**/.git"
     ],
     "extraResources": [
       {
-        "from": "backend",
+        "from": "backend/dist/backend",
         "to": "backend",
         "filter": [
-          "**/*",
-          "!__pycache__",
-          "!db/*.db",
-          "!**/*.pyc",
-          "!venv/**",
-          "!models/**"
+          "soundbot-backend*",
+          "*.so",
+          "*.dll",
+          "*.dylib",
+          "*.pyd",
+          "base_library.zip",
+          "lib-dynload/**"
         ]
       }
     ],
@@ -71,29 +79,59 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
-      "icon": "build/icon.icns"
+      "icon": "build/icon.icns",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
     },
     "win": {
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
-      "icon": "build/icon.png"
+      "icon": "build/icon.ico"
     },
     "linux": {
-      "target": ["AppImage"],
+      "target": [
+        "AppImage"
+      ],
       "category": "AudioVideo"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "license": "LICENSE"
+    },
+    "dmg": {
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "window": {
+        "width": 540,
+        "height": 380
+      }
     },
     "publish": null
   }

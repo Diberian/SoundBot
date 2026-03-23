@@ -1,21 +1,21 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-PyInstaller spec file for SoundBot backend (lightweight version)
-Excludes large dependencies (torch, transformers) - they are provided via venv
+SoundBot Backend PyInstaller Spec
+打包为独立可执行文件，支持 Windows/macOS/Linux
 """
 
 import sys
 import os
 from pathlib import Path
 
-block_cipher = None
-
-# 获取项目根目录
+# 获取当前工作目录（应该是 backend/ 目录）
 spec_dir = Path(os.getcwd())
 backend_dir = spec_dir
 project_root = backend_dir.parent
 
-# 添加数据文件（只包含代码，不包含大依赖）
+block_cipher = None
+
+# 数据文件配置 - 只包含代码，不包含模型
 datas = []
 
 # 添加 core 目录
@@ -26,46 +26,176 @@ if (backend_dir / 'core').exists():
 if (backend_dir / 'utils').exists():
     datas.append((str(backend_dir / 'utils'), 'utils'))
 
-# 添加配置文件
+# 添加 config.py
 if (backend_dir / 'config.py').exists():
     datas.append((str(backend_dir / 'config.py'), '.'))
 
-# 添加其他 Python 文件
-for py_file in ['database.py', 'reindex_folder.py', 'reset_and_reindex.py']:
-    if (backend_dir / py_file).exists():
-        datas.append((str(backend_dir / py_file), '.'))
+# 添加 models/schemas.py (Pydantic模型)
+if (backend_dir / 'models').exists():
+    datas.append((str(backend_dir / 'models'), 'models'))
 
-# 隐藏导入（只包含轻量级依赖）
+# 隐藏导入 - 包含所有需要的依赖
 hiddenimports = [
+    # FastAPI / Uvicorn
     'uvicorn.logging',
-    'uvicorn.loops',
     'uvicorn.loops.auto',
-    'uvicorn.protocols',
-    'uvicorn.protocols.http',
     'uvicorn.protocols.http.auto',
-    'uvicorn.protocols.websockets',
     'uvicorn.protocols.websockets.auto',
     'fastapi.middleware.cors',
+    'starlette.middleware.cors',
+    'starlette.middleware.errors',
+    
+    # 数据库
     'chromadb',
     'chromadb.config',
+    'chromadb.api.segment',
+    'aiosqlite',
+    'sqlite3',
+    
+    # 数据验证
     'pydantic',
     'pydantic_settings',
-    # 注意：torch, transformers, numpy 等大依赖通过 venv 提供
-]
-
-# 排除大依赖（这些将通过 venv 提供）
-excludes = [
+    'pydantic_core',
+    'pydantic.deprecated.decorator',
+    
+    # AI/ML 核心
     'torch',
     'torchaudio',
+    'torchvision',
+    'torch.nn',
+    'torch.utils',
     'transformers',
+    'transformers.models.clap',
+    'transformers.models.clap.modeling_clap',
+    'transformers.models.clap.configuration_clap',
+    'transformers.models.clap.feature_extraction_clap',
+    'transformers.models.clap.processing_clap',
+    'transformers.models.clap.tokenization_clap',
+    'sentence_transformers',
+    
+    # 数值计算
     'numpy',
+    'numpy.core._dtype_ctypes',
     'scipy',
-    'pandas',
-    'matplotlib',
-    'PIL',
-    'cv2',
+    'scipy.sparse',
+    'scipy.linalg',
+    'scipy.special',
+    'scipy.integrate',
+    
+    # 音频处理
+    'librosa',
+    'librosa.core',
+    'librosa.feature',
+    'librosa.util',
+    'soundfile',
+    'audioread',
+    'audioread.rawread',
+    'audioread.ffdec',
+    'mutagen',
+    'tinytag',
+    'numba',
+    'numba.core',
+    'llvmlite',
+    'soxr',
+    
+    # 机器学习
+    'sklearn',
+    'sklearn.utils',
+    'sklearn.preprocessing',
+    'sklearn.decomposition',
+    'joblib',
+    'threadpoolctl',
+    
+    # 工具库
+    'jieba',
+    'jieba.posseg',
+    'yaml',
+    'requests',
+    'httpx',
+    'huggingface_hub',
+    'regex',
+    'tokenizers',
+    'safetensors',
+    'packaging',
+    'packaging.version',
+    'packaging.specifiers',
+    'filelock',
+    'fsspec',
+    'tqdm',
+    'typing_extensions',
+    
+    # 其他
+    'asyncio',
+    'concurrent.futures',
+    'pathlib',
+    'json',
+    're',
+    'math',
+    'random',
+    'datetime',
+    'hashlib',
+    'urllib',
+    'urllib.parse',
+    'collections',
+    'functools',
+    'itertools',
+    'contextlib',
+    'typing',
+    'inspect',
+    'warnings',
+    'traceback',
+    'logging',
+    'logging.handlers',
 ]
 
+# 排除项 - 大幅减小体积
+excludes = [
+    # 测试相关
+    'pytest', '_pytest', 'unittest', 'unittest.mock', 'doctest', 'test', 'tests',
+    'nose', 'nose2', 'trial', 'tox',
+    
+    # GUI 相关 (后端不需要)
+    'matplotlib', 'matplotlib.pyplot', 'matplotlib.backends',
+    'PIL', 'PIL.Image', 'cv2', 'opencv',
+    'tkinter', 'Tkinter', '_tkinter',
+    'PyQt5', 'PyQt6', 'PySide2', 'PySide6', 'PyQt4',
+    'wx', 'wxPython', 'kivy', 'pyglet',
+    
+    # 文档工具
+    'sphinx', 'docutils', 'jinja2.ext.debug',
+    
+    # 开发工具
+    'ipython', 'IPython', 'jupyter', 'notebook', 'nbconvert', 'nbformat',
+    'pdb', 'pdbpp', 'ipdb', 'pudb', 'pydevd',
+    'cProfile', 'profile', 'pstats',
+    
+    # 不必要的 torch 模块
+    'torch.testing', 'torch.distributions', 
+    'torch.utils.tensorboard', 'torch.utils.cpp_extension',
+    'torch.jit.frontend', 'torch.jit.annotations',
+    'torch.onnx', 'torch.export',
+    
+    # 不必要的 transformers 功能
+    'transformers.pipelines.automatic_speech_recognition',
+    'transformers.pipelines.image_classification',
+    'transformers.pipelines.object_detection',
+    'transformers.pipelines.image_segmentation',
+    'transformers.pipelines.zero_shot_image_classification',
+    'transformers.models.vision_encoder_decoder',
+    'transformers.models.vit', 'transformers.models.deit',
+    'transformers.models.beit', 'transformers.models.swin',
+    
+    # 其他大体积但不需要的
+    'google.protobuf.pyext',  # 使用纯 Python 版本
+    'grpc_tools', 'grpcio_tools',
+    'tensorflow', 'tf', 'keras',
+    'tensorboard', 'tensorboardX',
+    'wandb', 'mlflow', 'comet_ml',
+    'datasets', 'evaluate', 'accelerate',
+    'optuna', 'ray', 'hyperopt',
+]
+
+# 分析阶段
 a = Analysis(
     [str(backend_dir / 'main.py')],
     pathex=[str(backend_dir)],
@@ -80,9 +210,23 @@ a = Analysis(
     win_private_assemblies=False,
     cipher=block_cipher,
     noarchive=False,
+    optimize=1,  # 字节码优化
 )
 
+# 过滤掉不需要的二进制文件
+binaries_to_exclude = [
+    'Qt5', 'Qt6', 'QtCore', 'QtGui', 'QtWidgets',
+    'opencv', 'cv2',
+    'tk', 'tcl',
+]
+a.binaries = [b for b in a.binaries if not any(x in str(b[0]) for x in binaries_to_exclude)]
+
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+
+# 可执行文件配置
+exe_name = 'soundbot-backend'
+if sys.platform == 'win32':
+    exe_name += '.exe'
 
 exe = EXE(
     pyz,
@@ -91,14 +235,19 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='SoundBot-backend',
+    name=exe_name,
     debug=False,
     bootloader_ignore_signals=False,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
+    strip=True,  # 去除符号表，减小体积
+    upx=True,    # UPX 压缩
+    upx_exclude=[
+        'vcruntime140.dll',
+        'vcruntime140_1.dll',
+        'msvcp140.dll',
+        'python*.dll',
+    ],
     runtime_tmpdir=None,
-    console=True,
+    console=True,  # 保留控制台用于调试，发布时可改为 False
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
