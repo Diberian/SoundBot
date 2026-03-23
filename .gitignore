@@ -6,7 +6,10 @@ yarn-error.log*
 
 # Build output
 dist/
-build/
+!build/icon.icns
+!build/icon.ico
+!build/icon.png
+!build/icon_*.png
 out/
 
 # Electron specific
