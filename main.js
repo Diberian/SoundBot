@@ -59,36 +59,39 @@ function getUserDataDir() {
 
 /**
  * 获取后端可执行文件路径
- * 支持 Windows (.exe) 和 macOS/Linux (无扩展名)
+ * onedir 模式：dist/backend/soundbot-backend/soundbot-backend
  */
 function getBackendExecutable() {
-  const exeName = process.platform === 'win32' 
-    ? 'soundbot-backend.exe' 
+  const exeName = process.platform === 'win32'
+    ? 'soundbot-backend.exe'
     : 'soundbot-backend';
-  
+
+  // onedir 模式的目录结构
+  const backendDir = 'soundbot-backend';
+
   // 可能的路径（按优先级）
   const possiblePaths = [
     // 1. 开发环境
-    path.join(__dirname, 'backend', 'dist', 'backend', exeName),
-    path.join(__dirname, 'backend', exeName),
-    
-    // 2. 生产环境 - app.asar.unpacked
-    path.join(process.resourcesPath, 'app.asar.unpacked', 'backend', exeName),
-    
-    // 3. 生产环境 - extraResources
+    path.join(__dirname, 'backend', 'dist', 'backend', backendDir, exeName),
+    path.join(__dirname, 'backend', 'dist', backendDir, exeName),
+    path.join(__dirname, 'backend', backendDir, exeName),
+
+    // 2. 生产环境 - extraResources (onedir)
+    path.join(process.resourcesPath, 'backend', backendDir, exeName),
     path.join(process.resourcesPath, 'backend', exeName),
-    
-    // 4. 应用目录（便携模式）
+
+    // 3. 应用目录（便携模式）
+    path.join(getAppRootDir(), 'backend', backendDir, exeName),
     path.join(getAppRootDir(), 'backend', exeName),
   ];
-  
+
   for (const p of possiblePaths) {
     if (fs.existsSync(p)) {
       console.log(`[Backend] 找到后端可执行文件: ${p}`);
       return p;
     }
   }
-  
+
   console.error('[Backend] 未找到后端可执行文件，尝试过的路径:', possiblePaths);
   return null;
 }

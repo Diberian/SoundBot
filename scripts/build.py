@@ -151,24 +151,32 @@ def build_backend() -> Path:
     
     # PyInstaller 使用实时输出避免缓冲区卡住
     run_command(cmd, capture=False)
-    
-    # 检查输出
+
+    # onedir 模式：输出是目录，不是单文件
     system = platform.system().lower()
-    exe_name = "soundbot-backend.exe" if system == "windows" else "soundbot-backend"
-    exe_path = backend_dist / exe_name
-    
-    if not exe_path.exists():
-        raise RuntimeError(f"后端可执行文件未生成: {exe_path}")
-    
-    # 检查文件大小
-    size_mb = exe_path.stat().st_size / 1024 / 1024
-    log(f"后端可执行文件: {exe_path}", "SUCCESS")
-    log(f"文件大小: {size_mb:.1f} MB")
-    
+    backend_dir_name = "soundbot-backend"
+    if system == "windows":
+        backend_dir_name += ".exe"
+    backend_dir_path = backend_dist / "soundbot-backend"
+
+    if not backend_dir_path.exists():
+        raise RuntimeError(f"后端目录未生成: {backend_dir_path}")
+
+    # 检查目录大小
+    total_size = 0
+    for root, dirs, files in os.walk(backend_dir_path):
+        for f in files:
+            fp = os.path.join(root, f)
+            total_size += os.path.getsize(fp)
+
+    size_mb = total_size / 1024 / 1024
+    log(f"后端目录: {backend_dir_path}", "SUCCESS")
+    log(f"目录大小: {size_mb:.1f} MB")
+
     if size_mb > 800:
         log(f"警告: 后端体积较大 ({size_mb:.1f} MB)，建议优化", "WARNING")
-    
-    return exe_path
+
+    return backend_dir_path
 
 
 def install_npm_deps():

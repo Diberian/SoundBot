@@ -76,8 +76,13 @@ jobs:
 
       - name: Check backend size
         run: |
-          ls -lh dist/backend/soundbot-backend
-          du -sh dist/backend/
+          if [ -d "dist/backend/soundbot-backend" ]; then
+            du -sh dist/backend/soundbot-backend
+            echo "Backend directory exists"
+          else
+            echo "Backend directory not found"
+            ls -la dist/backend/
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -88,8 +93,14 @@ jobs:
       - name: Verify backend exists
         run: |
           echo "=== Verifying backend ==="
-          ls -la dist/backend/
-          ls -la dist/backend/ | wc -l
+          if [ -d "dist/backend/soundbot-backend" ]; then
+            echo "Backend onedir exists"
+            ls -la dist/backend/soundbot-backend/
+            echo "File count: $(find dist/backend/soundbot-backend -type f | wc -l)"
+          else
+            echo "Backend onedir not found!"
+            ls -la dist/backend/
+          fi
 
       - name: Install Node dependencies
         run: npm ci
@@ -144,8 +155,14 @@ jobs:
       - name: Check backend size
         shell: pwsh
         run: |
-          Get-ChildItem dist/backend/soundbot-backend.exe | Select-Object Name, @{Name="SizeMB";Expression={[math]::Round($_.Length/1MB,2)}}
-          (Get-ChildItem dist/backend -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB
+          $backendDir = "dist/backend/soundbot-backend"
+          if (Test-Path $backendDir) {
+            $size = (Get-ChildItem $backendDir -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB
+            Write-Host "Backend directory size: $([math]::Round($size, 2)) MB"
+          } else {
+            Write-Host "Backend directory not found at: $backendDir"
+            Get-ChildItem dist/backend/
+          }
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -157,8 +174,15 @@ jobs:
         shell: pwsh
         run: |
           Write-Host "=== Verifying backend ==="
-          Get-ChildItem dist/backend/ -Recurse
-          Write-Host "File count: $((Get-ChildItem dist/backend/ -Recurse).Count)"
+          $backendDir = "dist/backend/soundbot-backend"
+          if (Test-Path $backendDir) {
+            Write-Host "Backend onedir exists"
+            Get-ChildItem $backendDir -Recurse | Select-Object FullName
+            Write-Host "File count: $((Get-ChildItem $backendDir -Recurse).Count)"
+          } else {
+            Write-Host "Backend onedir not found!"
+            Get-ChildItem dist/backend/
+          }
 
       - name: Install Node dependencies
         run: npm ci
