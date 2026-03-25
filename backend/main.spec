@@ -378,33 +378,12 @@ hiddenimports = [
 
 # 排除项 - 大幅减小体积（保留必要的 torch 模块）
 excludes = [
-    # 测试相关
-    'pytest', '_pytest', 'unittest', 'unittest.mock', 'doctest',
-    # 注意：不要排除 'test'，因为会误伤 torch.testing
-    # 'test', 'tests',
-    'nose', 'nose2', 'trial', 'tox',
-
-    # GUI 相关 (后端不需要)
+    # 只排除 GUI 相关（后端确实不需要）
     'matplotlib', 'matplotlib.pyplot', 'matplotlib.backends',
     'PIL', 'PIL.Image', 'cv2', 'opencv',
     'tkinter', 'Tkinter', '_tkinter',
     'PyQt5', 'PyQt6', 'PySide2', 'PySide6', 'PyQt4',
     'wx', 'wxPython', 'kivy', 'pyglet',
-
-    # 文档工具
-    'sphinx', 'docutils', 'jinja2.ext.debug',
-
-    # 开发工具
-    'ipython', 'IPython', 'jupyter', 'notebook', 'nbconvert', 'nbformat',
-    # 注意：不要排除 'pdb'，PyTorch 需要它
-    'pdbpp', 'ipdb', 'pudb', 'pydevd',
-    'cProfile', 'profile', 'pstats',
-
-    # 注意：不要排除任何 torch 模块，PyTorch 需要它们全部
-    # 'torch.testing',
-    # 'torch.distributions',
-
-    # 不必要的 transformers 功能（已移除，避免排除必要的）
 ]
 
 # 分析阶段
