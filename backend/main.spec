@@ -379,7 +379,9 @@ hiddenimports = [
 # 排除项 - 大幅减小体积（保留必要的 torch 模块）
 excludes = [
     # 测试相关
-    'pytest', '_pytest', 'unittest', 'unittest.mock', 'doctest', 'test', 'tests',
+    'pytest', '_pytest', 'unittest', 'unittest.mock', 'doctest',
+    # 注意：不要排除 'test'，因为会误伤 torch.testing
+    # 'test', 'tests',
     'nose', 'nose2', 'trial', 'tox',
 
     # GUI 相关 (后端不需要)
