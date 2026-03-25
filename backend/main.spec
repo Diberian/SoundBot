@@ -393,7 +393,8 @@ excludes = [
 
     # 开发工具
     'ipython', 'IPython', 'jupyter', 'notebook', 'nbconvert', 'nbformat',
-    'pdb', 'pdbpp', 'ipdb', 'pudb', 'pydevd',
+    # 注意：不要排除 'pdb'，PyTorch 需要它
+    'pdbpp', 'ipdb', 'pudb', 'pydevd',
     'cProfile', 'profile', 'pstats',
 
     # 不必要的 torch 模块
