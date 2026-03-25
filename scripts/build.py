@@ -147,6 +147,13 @@ def build_backend() -> Path:
         backend_dir_name += ".exe"
     backend_dir_path = DIST_DIR / "backend" / "soundbot-backend"
     
+    # 调试日志
+    log(f"检查后端路径: {backend_dir_path}")
+    log(f"路径是否存在: {backend_dir_path.exists()}")
+    if backend_dir_path.exists():
+        log(f"路径是绝对路径: {backend_dir_path.is_absolute()}")
+        log(f"路径内容: {list(backend_dir_path.iterdir())[:5]}...")  # 只显示前5个
+    
     # 检查是否已有构建好的后端（GitHub Actions 环境中）
     if backend_dir_path.exists():
         # 检查目录大小
