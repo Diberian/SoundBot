@@ -129,6 +129,7 @@
         "height": 380
       }
     },
+    "afterPack": "scripts/afterPack.js",
     "publish": null
   }
 }
