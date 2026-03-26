@@ -93,7 +93,7 @@ def get_logger(name: str = "soundmind") -> logging.Logger:
 # 创建默认日志目录和日志记录器
 def init_logger() -> logging.Logger:
     """初始化默认日志记录器"""
-    log_dir = Path(config.BASE_DIR) / "logs"
+    log_dir = config.get_user_data_dir() / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     
     log_file = log_dir / f"soundmind_{datetime.now().strftime('%Y%m%d')}.log"
