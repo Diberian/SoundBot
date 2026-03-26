@@ -61,13 +61,7 @@
       "!**/models",
       "!**/.git"
     ],
-    "extraResources": [
-      {
-        "from": "dist/backend/soundbot-backend",
-        "to": "backend/soundbot-backend",
-        "filter": ["**/*"]
-      }
-    ],
+
     "mac": {
       "category": "public.app-category.music",
       "target": [
