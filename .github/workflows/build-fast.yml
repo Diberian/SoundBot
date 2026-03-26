@@ -65,7 +65,14 @@ jobs:
           Write-Host "=== Building PyInstaller backend ==="
           cd backend
           pyinstaller main.spec --distpath ../dist/backend --workpath ../dist/build --noconfirm
-          Write-Host "Backend size: $([math]::Round((Get-ChildItem ../dist/backend/soundbot_backend.exe).Length/1MB,2)) MB"
+          $backendDir = "../dist/backend/soundbot-backend"
+          if (Test-Path $backendDir) {
+            $size = [math]::Round((Get-ChildItem $backendDir -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB, 2)
+            Write-Host "Backend size: $size MB"
+          } else {
+            Write-Host "Backend directory not found"
+            exit 1
+          }
 
       # 构建前端
       - name: Build Frontend

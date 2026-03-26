@@ -84,6 +84,22 @@ hiddenimports = [
     'starlette.staticfiles',
     'starlette.templating',
 
+    # 后端核心模块
+    'core.database',
+    'core.audio_cache',
+    'core.websocket_manager',
+    'core.playback_manager',
+    'core.scanner',
+    'core.embedder',
+    'core.indexer',
+    'core.searcher',
+    'core.search_engine',
+    'core.llm_config_manager',
+    'core.llm_client',
+    'core.ai_chat_service',
+    'core.model_preloader',
+    'core.ucs_keywords',
+
     # 数据库
     'chromadb',
     'chromadb.config',
