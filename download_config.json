@@ -3,23 +3,13 @@
   "resources": {
     "models": {
       "filename": "models.zip",
+      "filename_patterns": [
+        "models.zip",
+        "models-*.zip"
+      ],
       "extract_to": "models",
       "required": true,
       "description": "AI 模型文件 (CLAP等)"
-    },
-    "venv_macos": {
-      "filename": "venv-macos.zip",
-      "extract_to": "backend/venv",
-      "required": false,
-      "platform": "darwin",
-      "description": "macOS Python 虚拟环境"
-    },
-    "venv_windows": {
-      "filename": "venv-windows.zip",
-      "extract_to": "backend/venv",
-      "required": false,
-      "platform": "win32",
-      "description": "Windows Python 虚拟环境"
     }
   }
 }

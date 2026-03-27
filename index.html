@@ -476,8 +476,52 @@
             name: '默认工程'
         };
 
-        // API 基础路径
-        const API_BASE = 'http://127.0.0.1:8000';
+        let API_BASE = 'http://127.0.0.1:8000';
+        let WS_BASE = 'ws://127.0.0.1:8000';
+        let backendReady = false;
+
+        function apiUrl(path) {
+            return `${API_BASE}${path}`;
+        }
+
+        function wsUrl(path) {
+            return `${WS_BASE}${path}`;
+        }
+
+        async function initializeRuntimeConfig() {
+            try {
+                if (!window.electronAPI || !window.electronAPI.runtime) return;
+                const config = await window.electronAPI.runtime.getConfig();
+                if (config?.apiBase) API_BASE = config.apiBase;
+                if (config?.wsBase) WS_BASE = config.wsBase;
+            } catch (error) {
+                console.warn('[Frontend] 加载运行时配置失败，使用默认地址', error);
+            }
+        }
+
+        async function ensureBackendReady() {
+            if (backendReady) return true;
+
+            try {
+                if (window.electronAPI && window.electronAPI.backendStatus) {
+                    const result = await window.electronAPI.backendStatus.waitUntilReady(90000);
+                    if (result && result.success) {
+                        backendReady = true;
+                        return true;
+                    }
+
+                    throw new Error(result?.error || '后端未就绪');
+                }
+
+                const response = await fetch(apiUrl('/api/v1/health'));
+                backendReady = response.ok;
+                return backendReady;
+            } catch (error) {
+                console.error('[Frontend] 后端启动失败:', error);
+                showNotification('后端启动失败: ' + error.message, 'error');
+                return false;
+            }
+        }
 
         // 分类数据（动态生成）
         let categoryData = [
@@ -540,11 +584,11 @@
                 return;
             }
 
-            const wsUrl = `ws://127.0.0.1:8000/ws/playback/${clientId}`;
-            console.log('[Playback WS] 正在连接:', wsUrl);
+            const endpoint = wsUrl(`/ws/playback/${clientId}`);
+            console.log('[Playback WS] 正在连接:', endpoint);
 
             try {
-                playbackWebSocket = new WebSocket(wsUrl);
+                playbackWebSocket = new WebSocket(endpoint);
 
                 playbackWebSocket.onopen = () => {
                     console.log('[Playback WS] 连接已建立');
@@ -667,7 +711,7 @@
                 if (window.electronAPI && window.electronAPI.backendAPI) {
                     result = await window.electronAPI.backendAPI.getDiskSpace();
                 } else {
-                    const response = await fetch('http://127.0.0.1:8000/api/v1/disk-space');
+                    const response = await fetch(apiUrl('/api/v1/disk-space'));
                     result = await response.json();
                 }
 
@@ -694,7 +738,7 @@
         // 检查模型加载状态
         async function checkModelStatus() {
             try {
-                const response = await fetch('http://127.0.0.1:8000/api/v1/model/status');
+                const response = await fetch(apiUrl('/api/v1/model/status'));
                 const result = await response.json();
 
                 const modelDisplay = document.getElementById('modelStatusDisplay');
@@ -2476,7 +2520,7 @@
                 await backendStop();
 
                 // 调用后端 API 开始播放
-                const response = await fetch('http://127.0.0.1:8000/api/play', {
+                const response = await fetch(apiUrl('/api/play'), {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
@@ -2515,7 +2559,7 @@
         // 后端暂停
         async function backendPause() {
             try {
-                const response = await fetch('http://127.0.0.1:8000/api/pause', {
+                const response = await fetch(apiUrl('/api/pause'), {
                     method: 'POST'
                 });
                 if (response.ok) {
@@ -2531,7 +2575,7 @@
         // 后端继续播放
         async function backendResume() {
             try {
-                const response = await fetch('http://127.0.0.1:8000/api/resume', {
+                const response = await fetch(apiUrl('/api/resume'), {
                     method: 'POST'
                 });
                 if (response.ok) {
@@ -2547,7 +2591,7 @@
         // 后端停止
         async function backendStop() {
             try {
-                await fetch('http://127.0.0.1:8000/api/stop', {
+                await fetch(apiUrl('/api/stop'), {
                     method: 'POST'
                 });
                 isPlaying = false;
@@ -2561,7 +2605,7 @@
         // 后端跳转
         async function backendSeek(position) {
             try {
-                const response = await fetch('http://127.0.0.1:8000/api/seek', {
+                const response = await fetch(apiUrl('/api/seek'), {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({position: position})
@@ -3216,7 +3260,7 @@
             isAiResponding = true;
 
             try {
-                const response = await fetch('http://127.0.0.1:8000/api/v1/ai/chat', {
+                const response = await fetch(apiUrl('/api/v1/ai/chat'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -3450,7 +3494,7 @@
 
         async function loadAiConfig() {
             try {
-                const response = await fetch('http://127.0.0.1:8000/api/v1/ai/config');
+                const response = await fetch(apiUrl('/api/v1/ai/config'));
                 
                 if (!response.ok) {
                     console.warn('[AI Config] 后端服务未启动或配置接口不可用');
@@ -3742,7 +3786,7 @@
             }
 
             try {
-                const response = await fetch('http://127.0.0.1:8000/api/v1/ai/config/test', {
+                const response = await fetch(apiUrl('/api/v1/ai/config/test'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -3896,7 +3940,7 @@
             }
 
             try {
-                const response = await fetch('http://127.0.0.1:8000/api/v1/ai/config', {
+                const response = await fetch(apiUrl('/api/v1/ai/config'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -4131,8 +4175,6 @@
             document.getElementById('closeOpenProjectModal').addEventListener('click', hideOpenProjectModal);
             document.getElementById('cancelOpenProjectBtn').addEventListener('click', hideOpenProjectModal);
 
-            // 加载当前工程信息
-            loadCurrentProject();
         }
 
         // 显示新建工程弹窗
@@ -4244,7 +4286,7 @@
             try {
                 showNotification('正在创建工程...', 'info');
 
-                const response = await fetch('http://127.0.0.1:8000/api/v1/projects', {
+                const response = await fetch(apiUrl('/api/v1/projects'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -4297,7 +4339,7 @@
             lucide.createIcons();
 
             try {
-                let url = showRecent ? 'http://127.0.0.1:8000/api/v1/projects/recent' : 'http://127.0.0.1:8000/api/v1/projects';
+                let url = showRecent ? apiUrl('/api/v1/projects/recent') : apiUrl('/api/v1/projects');
                 const response = await fetch(url);
                 const result = await response.json();
 
@@ -4383,7 +4425,7 @@
             try {
                 showNotification(`正在删除工程 "${projectName}"...`, 'info');
 
-                const response = await fetch(`http://127.0.0.1:8000/api/v1/projects/${projectId}`, {
+                const response = await fetch(apiUrl(`/api/v1/projects/${projectId}`), {
                     method: 'DELETE'
                 });
 
@@ -4413,7 +4455,7 @@
             try {
                 showNotification(`正在切换到工程 "${projectName}"...`, 'info');
 
-                const response = await fetch(`http://127.0.0.1:8000/api/v1/projects/${projectId}/switch`, {
+                const response = await fetch(apiUrl(`/api/v1/projects/${projectId}/switch`), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
@@ -4466,7 +4508,7 @@
                 try {
                     const savedProject = JSON.parse(saved);
                     // 验证工程是否存在
-                    const response = await fetch(`http://127.0.0.1:8000/api/v1/projects/${savedProject.id}`);
+                    const response = await fetch(apiUrl(`/api/v1/projects/${savedProject.id}`));
                     if (response.ok) {
                         currentProject = savedProject;
                         document.getElementById('currentProjectName').textContent = currentProject.name;
@@ -4678,11 +4720,11 @@
 
         // 连接到 WebSocket 获取扫描进度
         function connectScanWebSocket(clientId) {
-            const wsUrl = `ws://127.0.0.1:8000/ws/scan/${clientId}`;
-            console.log('[DEBUG] 正在连接 WebSocket:', wsUrl);
+            const endpoint = wsUrl(`/ws/scan/${clientId}`);
+            console.log('[DEBUG] 正在连接 WebSocket:', endpoint);
 
             try {
-                scanWebSocket = new WebSocket(wsUrl);
+                scanWebSocket = new WebSocket(endpoint);
 
                 scanWebSocket.onopen = () => {
                     console.log('[DEBUG] WebSocket 连接已建立');
@@ -5037,13 +5079,6 @@
                 });
             }
 
-            // 从 SQLite 数据库加载文件列表（秒加载）
-            await loadFilesFromDatabase();
-
-            // 加载用户自定义文件夹
-            await loadUserFolders();
-
-            // Initialize
             initAudioPlayer();
             initWaveSurfer();
             renderFolderTree();
@@ -5051,7 +5086,20 @@
             renderSoundList();
             drawMainWaveform();
 
-            // 连接后端播放状态 WebSocket
+            await initializeRuntimeConfig();
+            const isBackendReady = await ensureBackendReady();
+            if (!isBackendReady) {
+                const diskSpaceText = document.getElementById('diskSpaceText');
+                if (diskSpaceText) {
+                    diskSpaceText.textContent = '后端未就绪';
+                }
+                return;
+            }
+
+            await loadCurrentProject();
+            await loadFilesFromDatabase();
+            await loadUserFolders();
+
             playbackWsClientId = 'frontend-' + Date.now();
             connectPlaybackWebSocket(playbackWsClientId);
 
@@ -5239,7 +5287,7 @@
                     if (window.electronAPI && window.electronAPI.backendAPI) {
                         result = await window.electronAPI.backendAPI.clearTempClips();
                     } else {
-                        const response = await fetch('http://127.0.0.1:8000/api/v1/temp-clips/clear', {
+                        const response = await fetch(apiUrl('/api/v1/temp-clips/clear'), {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' }
                         });
@@ -5270,11 +5318,8 @@
             document.getElementById('firstTimeUseDefaultBtn').addEventListener('click', firstTimeUseDefault);
             document.getElementById('firstTimeConfirmBtn').addEventListener('click', firstTimeConfirm);
             
-            // 检查是否需要显示首次启动弹窗
-            checkFirstTimeSetup();
-
-            // ==================== 工程管理事件监听 ====================
             initProjectManagement();
+            checkFirstTimeSetup();
             
             // ==================== 初始化语言设置 ====================
             // 从 localStorage 加载语言设置
@@ -5792,7 +5837,7 @@
                         if (window.electronAPI && window.electronAPI.backendAPI) {
                             result = await window.electronAPI.backendAPI.exportClip(filePath, startSec, endSec);
                         } else {
-                            const response = await fetch('http://127.0.0.1:8000/api/export/clip', {
+                            const response = await fetch(apiUrl('/api/export/clip'), {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ path: filePath, start: startSec, end: endSec, temp_file: true })

@@ -208,6 +208,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
         clearTempClips: () => ipcRenderer.invoke('backend-api', 'clear-temp-clips')
     },
 
+  backendStatus: {
+    waitUntilReady: (timeoutMs = 60000) => ipcRenderer.invoke('wait-backend-ready', timeoutMs)
+  },
+
+  runtime: {
+    getConfig: () => ipcRenderer.invoke('get-runtime-config')
+  },
+
   // 平台信息
   platform: process.platform,
 

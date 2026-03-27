@@ -164,7 +164,7 @@ def build_backend() -> Path:
                 total_size += os.path.getsize(fp)
         
         size_mb = total_size / 1024 / 1024
-        if size_mb > 500:  # 如果大于 500MB，认为已经构建好了
+        if size_mb > 100:  # 如果大于 100MB，认为已经构建好了 (降低阈值避免误判)
             log(f"检测到已构建的后端: {backend_dir_path}", "SUCCESS")
             log(f"目录大小: {size_mb:.1f} MB")
             log("跳过 PyInstaller 构建，使用现有后端")

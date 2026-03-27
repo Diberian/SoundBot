@@ -7,10 +7,10 @@
 **GitHub Actions 会自动处理所有依赖：**
 
 1. **Node.js 依赖** - 自动安装 (`npm ci`)
-2. **Python 依赖** - 自动创建 venv 并安装 (`pip install -r requirements.txt`)
+2. **Python 依赖** - 自动安装并打包到 PyInstaller 后端
 3. **AI 模型** - 自动下载到 `models/` 目录
 
-用户下载安装包后**无需任何配置**，开箱即用！
+应用安装包包含 Electron 前端和 PyInstaller 后端，AI 模型需要首次额外下载一次。
 
 ---
 
@@ -30,8 +30,6 @@ python scripts/download_models.py
 
 ### build_backend.py（可选）
 使用 PyInstaller 将 Python 后端打包为独立可执行文件。
-
-**注意**：此脚本为备选方案，当前使用 venv 打包方式更简单可靠。
 
 ---
 
@@ -53,7 +51,7 @@ cd ..
 # 3. 下载 AI 模型
 python scripts/download_models.py
 
-# 4. 打包（包含 venv 和模型）
+# 4. 打包（应用包包含 PyInstaller 后端，不包含 models）
 npm run build:mac
 
 # 输出: dist/SoundBot-0.1.0-alpha.dmg
@@ -94,12 +92,12 @@ git push origin v0.1.0
 
 GitHub Actions 会自动：
 1. ✅ 安装 Node.js 依赖
-2. ✅ 创建 Python venv 并安装依赖
+2. ✅ 安装 Python 依赖并构建 PyInstaller 后端
 3. ✅ 下载 AI 模型
-4. ✅ 打包应用（包含所有依赖）
+4. ✅ 发布应用安装包与独立的 models.zip
 5. ✅ 发布到 GitHub Releases
 
-用户只需下载安装包即可使用，无需配置环境！
+用户需下载安装包，并在首次启动前额外下载 models.zip。
 
 ---
 
@@ -108,9 +106,9 @@ GitHub Actions 会自动：
 | 组件 | 大小 |
 |------|------|
 | Electron | ~150MB |
-| Python venv + 依赖 | ~1GB |
+| PyInstaller 后端 | ~300MB-800MB |
 | CLAP 模型 | ~744MB |
 | 应用代码 | ~10MB |
-| **总计** | **~1.9GB** |
+| **总计** | **~1.2GB-1.6GB** |
 
-体积较大是因为包含了完整的 Python 环境和 AI 模型，但用户无需任何配置即可使用。
+体积较大主要来自 PyInstaller 后端和 AI 模型，模型作为独立资源发布。

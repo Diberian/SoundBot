@@ -121,7 +121,13 @@
         "height": 380
       }
     },
-    "afterPack": "scripts/afterPack.js",
+    "extraResources": [
+      {
+        "from": "dist/backend/soundbot-backend",
+        "to": "backend/soundbot-backend",
+        "filter": ["**/*"]
+      }
+    ],
     "publish": null
   }
 }

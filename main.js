@@ -20,8 +20,12 @@ protocol.registerSchemesAsPrivileged([
 
 let mainWindow;
 let backendProcess = null;
-const BACKEND_PORT = 8000;
-const API_BASE_URL = `http://127.0.0.1:${BACKEND_PORT}/api/v1`;
+let backendStartupPromise = null;
+let ipcHandlersInitialized = false;
+const BACKEND_PORT = Number(process.env.SOUNDBOT_PORT || 8000);
+const BACKEND_ORIGIN = `http://127.0.0.1:${BACKEND_PORT}`;
+const BACKEND_WS_ORIGIN = `ws://127.0.0.1:${BACKEND_PORT}`;
+const API_BASE_URL = `${BACKEND_ORIGIN}/api/v1`;
 
 // GitHub 仓库配置
 const GITHUB_REPO = 'Huckrick/SoundBot';
@@ -68,17 +72,14 @@ function getBackendExecutable() {
 
   // 可能的路径（按优先级）
   const possiblePaths = [
-    // 1. 生产环境 - afterPack 复制后的路径
+    // 1. 生产环境 - extraResources 路径
     path.join(process.resourcesPath, 'backend', 'soundbot-backend', exeName),
 
-    // 2. 生产环境 - extraResources 路径
-    path.join(process.resourcesPath, 'backend', 'soundbot-backend', exeName),
-
-    // 3. 开发环境
+    // 2. 开发环境
     path.join(__dirname, 'dist', 'backend', 'soundbot-backend', exeName),
     path.join(__dirname, 'backend', 'dist', 'backend', 'soundbot-backend', exeName),
 
-    // 4. 应用目录（便携模式）
+    // 3. 应用目录（便携模式）
     path.join(getAppRootDir(), 'backend', 'soundbot-backend', exeName),
     path.join(getAppRootDir(), 'resources', 'backend', 'soundbot-backend', exeName),
   ];
@@ -257,20 +258,27 @@ async function startBackend() {
   // 获取后端可执行文件
   const backendExe = getBackendExecutable();
   if (!backendExe) {
-    dialog.showErrorBox('错误', '未找到后端可执行文件，请重新安装应用');
+    dialog.showErrorBox(
+      '错误', 
+      '未找到后端可执行文件，请重新安装应用。\n\n【重要提示】：如果您使用的是 Windows 系统，这很可能是因为 Windows Defender 或其他杀毒软件误报并将核心文件(soundbot-backend.exe)隔离或删除了。请尝试将软件安装目录加入杀毒软件白名单后，重新安装。'
+    );
     return { success: false, error: '未找到后端可执行文件' };
   }
 
   // 验证后端目录完整性
   const backendDir = path.dirname(backendExe);
   if (!verifyBackendIntegrity(backendDir)) {
-    dialog.showErrorBox('错误', '后端文件不完整，请重新安装应用');
+    dialog.showErrorBox(
+      '错误', 
+      '后端文件不完整，请重新安装应用。\n\n【重要提示】：如果您使用的是 Windows 系统，这很可能是因为 Windows Defender 或其他杀毒软件误报并将部分核心文件隔离或删除了。请尝试将软件安装目录加入杀毒软件白名单后，重新安装。'
+    );
     return { success: false, error: '后端文件不完整' };
   }
 
   // 设置环境变量
   const env = {
     ...process.env,
+    SOUNDBOT_PORT: String(BACKEND_PORT),
     SOUNDBOT_MODELS_PATH: modelStatus.path,
     PYTHONUNBUFFERED: '1',
     PYTHONIOENCODING: 'utf-8'
@@ -303,11 +311,13 @@ async function startBackend() {
     backendProcess.on('error', (error) => {
       console.error('[Backend] Process error:', error);
       backendProcess = null;
+      backendStartupPromise = null;
     });
 
     backendProcess.on('exit', (code, signal) => {
       console.log(`[Backend] Process exited, code: ${code}, signal: ${signal}`);
       backendProcess = null;
+      backendStartupPromise = null;
     });
 
     // 等待服务启动
@@ -337,6 +347,246 @@ async function startBackend() {
   } catch (error) {
     console.error('[Backend] Startup failed:', error);
     return { success: false, error: error.message };
+  }
+}
+
+async function waitForBackendHealth(timeoutMs = 60000) {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/health`);
+      if (res.ok) {
+        return { success: true };
+      }
+    } catch (error) {
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+
+  return { success: false, error: '启动超时' };
+}
+
+async function ensureBackendStarted() {
+  if (backendProcess) {
+    return await waitForBackendHealth();
+  }
+
+  if (backendStartupPromise) {
+    return await backendStartupPromise;
+  }
+
+  backendStartupPromise = startBackend()
+    .finally(() => {
+      if (!backendProcess) {
+        backendStartupPromise = null;
+      }
+    });
+
+  return await backendStartupPromise;
+}
+
+function getRuntimeConfig() {
+  return {
+    port: BACKEND_PORT,
+    apiBase: BACKEND_ORIGIN,
+    apiV1Base: API_BASE_URL,
+    wsBase: BACKEND_WS_ORIGIN
+  };
+}
+
+async function parseBackendError(response) {
+  const contentType = response.headers.get('content-type') || '';
+
+  try {
+    if (contentType.includes('application/json')) {
+      const data = await response.json();
+      return data.detail || data.error || JSON.stringify(data);
+    }
+
+    const text = await response.text();
+    return text || `HTTP ${response.status}`;
+  } catch (error) {
+    return `HTTP ${response.status}`;
+  }
+}
+
+async function requestBackendJson(url, options = {}) {
+  const response = await fetch(url, options);
+
+  if (!response.ok) {
+    throw new Error(await parseBackendError(response));
+  }
+
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    return await response.json();
+  }
+
+  return { success: true, data: await response.text() };
+}
+
+async function requestBackendBinary(url, options = {}) {
+  const response = await fetch(url, options);
+
+  if (!response.ok) {
+    throw new Error(await parseBackendError(response));
+  }
+
+  const buffer = await response.arrayBuffer();
+  return {
+    success: true,
+    data: Array.from(new Uint8Array(buffer)),
+    headers: {
+      cached: response.headers.get('X-Cached'),
+      duration: response.headers.get('X-Duration')
+    }
+  };
+}
+
+function createBackendRequest(action, data = {}) {
+  const filePath = typeof data === 'string' ? data : (data.filePath || data.path || '');
+  const encodedPath = encodeURIComponent(filePath);
+
+  switch (action) {
+    case 'health':
+      return { url: `${API_BASE_URL}/health` };
+    case 'scan':
+      return {
+        url: `${API_BASE_URL}/scan`,
+        options: {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            folder_path: data.folderPath,
+            recursive: data.recursive ?? true
+          })
+        }
+      };
+    case 'scan-only':
+      return {
+        url: `${API_BASE_URL}/scan-only`,
+        options: {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            folder_path: data.folderPath,
+            recursive: data.recursive ?? true
+          })
+        }
+      };
+    case 'import-async':
+      return {
+        url: `${API_BASE_URL}/import/async?client_id=${encodeURIComponent(data.clientId || 'default')}`,
+        options: {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            folder_path: data.folderPath,
+            recursive: data.recursive ?? true
+          })
+        }
+      };
+    case 'search':
+      return {
+        url: `${API_BASE_URL}/search`,
+        options: {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: data.query,
+            top_k: data.topK,
+            threshold: data.threshold,
+            page: data.page || 1,
+            page_size: data.page_size || 50
+          })
+        }
+      };
+    case 'index-status':
+      return { url: `${API_BASE_URL}/index/status` };
+    case 'indexed-files':
+      return { url: `${API_BASE_URL}/files` };
+    case 'db-files':
+      return { url: `${API_BASE_URL}/db/files` };
+    case 'db-file':
+      return { url: `${API_BASE_URL}/db/file/${encodedPath}` };
+    case 'db-file-tags':
+      return {
+        url: `${API_BASE_URL}/db/file/${encodeURIComponent(data.path)}/tags`,
+        options: {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tags: data.tags || [] })
+        }
+      };
+    case 'db-file-delete':
+      return {
+        url: `${API_BASE_URL}/db/file/${encodedPath}`,
+        options: { method: 'DELETE' }
+      };
+    case 'db-stats':
+      return { url: `${API_BASE_URL}/db/stats` };
+    case 'audio-url':
+      return { localOnly: true, result: { success: true, url: `${API_BASE_URL}/audio/${encodedPath}` } };
+    case 'waveform':
+      return { url: `${BACKEND_ORIGIN}/api/waveform?path=${encodedPath}` };
+    case 'audio-preload':
+      return {
+        url: `${API_BASE_URL}/audio/preload/${encodedPath}`,
+        options: { method: 'POST' }
+      };
+    case 'audio-decoded':
+      return { url: `${API_BASE_URL}/audio/decoded/${encodedPath}` };
+    case 'audio-stream':
+      return { url: `${API_BASE_URL}/audio/stream/${encodedPath}`, responseType: 'binary' };
+    case 'export-clip':
+      return {
+        url: `${BACKEND_ORIGIN}/api/export/clip`,
+        options: {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            path: data.filePath,
+            start: data.start,
+            end: data.end,
+            temp_file: data.tempFile
+          })
+        }
+      };
+    case 'audio-fade':
+      return {
+        url: `${BACKEND_ORIGIN}/api/audio/fade`,
+        options: {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            path: data.filePath,
+            fade_in: data.fadeIn,
+            fade_out: data.fadeOut
+          })
+        }
+      };
+    case 'get-temp-dir':
+      return { url: `${API_BASE_URL}/config/temp-dir` };
+    case 'set-temp-dir':
+      return {
+        url: `${API_BASE_URL}/config/temp-dir`,
+        options: {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ temp_dir: data.tempDir })
+        }
+      };
+    case 'disk-space':
+      return { url: `${API_BASE_URL}/disk-space` };
+    case 'clear-temp-clips':
+      return {
+        url: `${API_BASE_URL}/temp-clips/clear`,
+        options: { method: 'POST' }
+      };
+    default:
+      return null;
   }
 }
 
@@ -408,7 +658,7 @@ function createWindow() {
           "font-src 'self' https://fonts.gstatic.com; " +
           "img-src 'self' data: blob:; " +
           "media-src 'self' blob: soundmind-audio:; " +
-          "connect-src 'self' http://127.0.0.1:8000 ws://127.0.0.1:8000 " +
+          `connect-src 'self' ${BACKEND_ORIGIN} ${BACKEND_WS_ORIGIN} ` +
           "https://api.openai.com https://api.moonshot.cn https://api.anthropic.com " +
           "https://api.deepseek.com https://api.siliconflow.cn " +
           "https://generativelanguage.googleapis.com;"
@@ -435,7 +685,10 @@ function createWindow() {
   });
 
   createMenu();
-  setupIpcHandlers();
+  if (!ipcHandlersInitialized) {
+    setupIpcHandlers();
+    ipcHandlersInitialized = true;
+  }
 }
 
 function createMenu() {
@@ -533,20 +786,140 @@ function setupIpcHandlers() {
   // 后端 API 代理
   ipcMain.handle('backend-api', async (event, action, data) => {
     try {
-      const url = `${API_BASE_URL}/${action}`;
-      const options = {
-        method: data?.method || 'GET',
-        headers: { 'Content-Type': 'application/json' }
-      };
-
-      if (data?.body) {
-        options.body = JSON.stringify(data.body);
+      if (action === 'start-server') {
+        return await ensureBackendStarted();
       }
 
-      const response = await fetch(url, options);
-      return await response.json();
+      if (action === 'stop-server') {
+        return await stopBackend();
+      }
+
+      if (action === 'runtime-config') {
+        return getRuntimeConfig();
+      }
+
+      const startupResult = await ensureBackendStarted();
+      if (!startupResult.success) {
+        return startupResult;
+      }
+
+      const requestConfig = createBackendRequest(action, data);
+      if (!requestConfig) {
+        return { success: false, error: `未知操作: ${action}` };
+      }
+
+      if (requestConfig.localOnly) {
+        return requestConfig.result;
+      }
+
+      if (requestConfig.responseType === 'binary') {
+        return await requestBackendBinary(requestConfig.url, requestConfig.options);
+      }
+
+      return await requestBackendJson(requestConfig.url, requestConfig.options);
     } catch (error) {
       console.error('[IPC] Backend API error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('wait-backend-ready', async (event, timeoutMs = 60000) => {
+    const startupResult = await ensureBackendStarted();
+    if (!startupResult.success) {
+      return startupResult;
+    }
+
+    return await waitForBackendHealth(timeoutMs);
+  });
+
+  ipcMain.handle('get-runtime-config', () => getRuntimeConfig());
+  ipcMain.handle('get-app-path', () => getAppRootDir());
+  ipcMain.handle('check-full-disk-access', async () => {
+    if (process.platform !== 'darwin') {
+      return true;
+    }
+
+    try {
+      fs.readdirSync(app.getPath('documents'));
+      return true;
+    } catch (error) {
+      return false;
+    }
+  });
+  ipcMain.handle('open-privacy-settings', async () => {
+    if (process.platform !== 'darwin') {
+      return { success: false, error: '仅支持 macOS' };
+    }
+
+    await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles');
+    return { success: true };
+  });
+
+  const supportedAudioExtensions = new Set(['.wav', '.mp3', '.flac', '.aiff', '.aif', '.ogg', '.m4a', '.aac', '.wma']);
+  ipcMain.handle('file-import', async (event, action, payload) => {
+    try {
+      switch (action) {
+        case 'select-audio': {
+          const result = await dialog.showOpenDialog(mainWindow, {
+            properties: ['openFile', 'multiSelections'],
+            filters: [
+              { name: 'Audio Files', extensions: ['wav', 'mp3', 'flac', 'aiff', 'aif', 'ogg', 'm4a', 'aac', 'wma'] }
+            ],
+            ...payload
+          });
+          return result;
+        }
+        case 'select-folder':
+          return await dialog.showOpenDialog(mainWindow, {
+            properties: ['openDirectory'],
+            ...payload
+          });
+        case 'handle-drop':
+          return {
+            success: true,
+            files: (payload || []).filter((filePath) => typeof filePath === 'string' && fs.existsSync(filePath))
+          };
+        case 'get-info': {
+          if (!payload || !fs.existsSync(payload)) {
+            return { success: false, error: '文件不存在' };
+          }
+
+          const stats = fs.statSync(payload);
+          return {
+            success: true,
+            path: payload,
+            name: path.basename(payload),
+            size: stats.size,
+            isDirectory: stats.isDirectory(),
+            extension: path.extname(payload).toLowerCase()
+          };
+        }
+        case 'validate-type': {
+          const extension = path.extname(payload || '').toLowerCase();
+          return {
+            success: true,
+            valid: supportedAudioExtensions.has(extension),
+            extension
+          };
+        }
+        default:
+          return { success: false, error: `未知文件导入操作: ${action}` };
+      }
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('notification-show', async (event, { title, body, options } = {}) => {
+    try {
+      const notification = new Notification({
+        title: title || 'SoundBot',
+        body: body || '',
+        ...options
+      });
+      notification.show();
+      return { success: true };
+    } catch (error) {
       return { success: false, error: error.message };
     }
   });
@@ -621,8 +994,7 @@ function setupIpcHandlers() {
 app.whenReady().then(async () => {
   createWindow();
 
-  // 启动后端
-  const result = await startBackend();
+  const result = await ensureBackendStarted();
   if (!result.success) {
     console.error('[App] Backend startup failed:', result.error);
   }
@@ -636,6 +1008,12 @@ app.on('window-all-closed', async () => {
 app.on('activate', () => {
   if (mainWindow === null) {
     createWindow();
+  }
+
+  if (!backendProcess) {
+    ensureBackendStarted().catch((error) => {
+      console.error('[App] Backend restart failed:', error);
+    });
   }
 });
 

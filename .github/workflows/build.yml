@@ -37,7 +37,7 @@ jobs:
           echo "=== Creating Models package ==="
           mkdir -p release
           cd models
-          zip -r ../release/models-${GITHUB_REF_NAME}.zip .
+          zip -r ../release/models.zip .
           cd ..
           echo "Models package created:"
           ls -lh release/
@@ -46,7 +46,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: models-package
-          path: release/models-*.zip
+          path: release/models.zip
           if-no-files-found: error
 
   # 构建 macOS 应用（PyInstaller + Electron）

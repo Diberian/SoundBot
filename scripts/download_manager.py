@@ -11,6 +11,7 @@ import hashlib
 import zipfile
 import shutil
 import subprocess
+import fnmatch
 from pathlib import Path
 from urllib.request import urlopen, Request
 from urllib.error import HTTPError, URLError
@@ -29,23 +30,10 @@ DEFAULT_CONFIG = {
     "resources": {
         "models": {
             "filename": "models.zip",
+            "filename_patterns": ["models.zip", "models-*.zip"],
             "extract_to": "models",
             "required": True,
             "description": "AI 模型文件 (CLAP等)"
-        },
-        "venv_macos": {
-            "filename": "venv-macos.zip",
-            "extract_to": "backend/venv",
-            "required": False,
-            "platform": "darwin",
-            "description": "macOS Python 虚拟环境"
-        },
-        "venv_windows": {
-            "filename": "venv-windows.zip",
-            "extract_to": "backend/venv",
-            "required": False,
-            "platform": "win32",
-            "description": "Windows Python 虚拟环境"
         }
     }
 }
@@ -188,12 +176,29 @@ def verify_download(file_path, expected_hash=None):
     return True
 
 
+def find_release_asset(resource, release):
+    """按固定名称或模式查找 release 资源文件"""
+    filename = resource["filename"]
+    filename_patterns = resource.get("filename_patterns", [filename])
+
+    for asset in release.get("assets", []):
+        if asset["name"] == filename:
+            return asset, asset["name"]
+
+    for pattern in filename_patterns:
+        for asset in release.get("assets", []):
+            if fnmatch.fnmatch(asset["name"], pattern):
+                return asset, asset["name"]
+
+    return None, filename
+
+
 def download_resource(resource_type, release_tag=None, force=False):
     """
     下载指定资源
     
     Args:
-        resource_type: 'models', 'venv_macos', 'venv_windows'
+        resource_type: 'models'
         release_tag: 指定 release 标签，None 表示最新版
         force: 是否强制重新下载
     """
@@ -236,11 +241,7 @@ def download_resource(resource_type, release_tag=None, force=False):
     
     # 查找资源文件
     filename = resource["filename"]
-    asset = None
-    for a in release.get("assets", []):
-        if a["name"] == filename:
-            asset = a
-            break
+    asset, asset_name = find_release_asset(resource, release)
     
     if not asset:
         print(f"[ERROR] 在 release {release['tag_name']} 中未找到 {filename}")
@@ -258,7 +259,7 @@ def download_resource(resource_type, release_tag=None, force=False):
     
     # 下载文件
     download_dir = get_download_dir()
-    download_path = download_dir / filename
+    download_path = download_dir / asset_name
     
     print(f"[INFO] 下载 {resource_type}...")
     print(f"[INFO] 版本: {release['tag_name']}")
@@ -399,9 +400,8 @@ def main():
 示例:
   %(prog)s check              检查资源状态
   %(prog)s download models    下载 AI 模型
-  %(prog)s download venv      下载 Python 环境（当前平台）
-  %(prog)s download all       下载所有资源
-  %(prog)s setup              自动设置环境（下载资源或创建 venv）
+  %(prog)s download all       下载所有必需资源
+  %(prog)s setup              自动设置环境（下载 AI 模型）
         """
     )
     
@@ -414,7 +414,7 @@ def main():
     parser.add_argument(
         "resource",
         nargs="?",
-        choices=["models", "venv", "venv_macos", "venv_windows", "all"],
+        choices=["models", "all"],
         help="要下载的资源类型"
     )
     
@@ -456,10 +456,6 @@ def main():
         
         if args.resource == "all":
             resources = ["models"]
-            if get_platform() == "darwin":
-                resources.append("venv_macos")
-            elif get_platform() == "win32":
-                resources.append("venv_windows")
             
             success = True
             for res in resources:
@@ -467,17 +463,7 @@ def main():
                     success = False
             
             sys.exit(0 if success else 1)
-        
-        elif args.resource == "venv":
-            if get_platform() == "darwin":
-                success = download_resource("venv_macos", args.tag, args.force)
-            elif get_platform() == "win32":
-                success = download_resource("venv_windows", args.tag, args.force)
-            else:
-                print("[ERROR] 不支持的平台，尝试创建本地 venv...")
-                success = setup_python_env()
-            sys.exit(0 if success else 1)
-        
+
         else:
             success = download_resource(args.resource, args.tag, args.force)
             sys.exit(0 if success else 1)
@@ -501,13 +487,6 @@ def main():
         if not results.get("models", {}).get("exists", False):
             if not download_resource("models"):
                 print("[WARN] 模型下载失败，应用可能无法正常使用")
-        
-        # 下载或创建 venv
-        platform_key = f"venv_{get_platform()}"
-        if not results.get(platform_key, {}).get("exists", False):
-            if not download_resource(platform_key):
-                print("[INFO] 尝试创建本地 Python 环境...")
-                setup_python_env()
         
         # 最终检查
         print("\n" + "=" * 60)

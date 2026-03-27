@@ -33,7 +33,7 @@ Starting from v0.1.2, SoundBot adopts a **PyInstaller all-in-one architecture**.
 
 | 资源 / Resource | 下载链接 / Download | 大小 / Size | 说明 / Description |
 |----------------|--------------------|-------------|-------------------|
-| **AI 模型 / Models** | [📦 models-0.1.2.zip](https://github.com/Huckrick/SoundBot/releases/download/v0.1.2/models-0.1.2.zip) | ~500MB-1GB | **所有平台通用 / All platforms** |
+| **AI 模型 / Models** | [📦 models.zip](https://github.com/Huckrick/SoundBot/releases/download/v0.1.2/models.zip) | ~500MB-1GB | **所有平台通用 / All platforms** |
 
 ### 界面预览 / Screenshot
 
@@ -57,8 +57,8 @@ Starting from v0.1.2, SoundBot adopts a **PyInstaller all-in-one architecture**.
 
 3. **下载并放置 AI 模型** / Download and place AI models
    ```bash
-   # 下载 models-0.1.2.zip 后解压到以下任一位置：
-   # Download models-0.1.2.zip and extract to any of the following locations:
+   # 下载 models.zip 后解压到以下任一位置：
+   # Download models.zip and extract to any of the following locations:
    
    # 方法 1：应用包内（推荐 / Recommended）
    # Method 1: Inside app bundle (Recommended)
@@ -90,7 +90,7 @@ Starting from v0.1.2, SoundBot adopts a **PyInstaller all-in-one architecture**.
    - 默认安装路径 / Default install path：`C:\Users\<Username>\AppData\Local\Programs\SoundBot`
 
 3. **下载并放置 AI 模型** / Download and place AI models
-   - 下载 `models-0.1.2.zip` / Download `models-0.1.2.zip`
+   - 下载 `models.zip` / Download `models.zip`
    - 解压到以下任一位置 / Extract to any of the following locations:
      - 安装目录 / Install directory：`C:\Users\<Username>\AppData\Local\Programs\SoundBot\models\`
      - 用户数据目录 / User data directory：`C:\Users\<Username>\AppData\Roaming\SoundBot\models\`
@@ -121,8 +121,8 @@ models/
 - Model files **do not** need to be re-downloaded (unless new version explicitly states model update is required)
 
 **模型更新** / Model Update：
-- 如果新版本需要更新模型，会单独发布新的 `models-x.x.x.zip`
-- If new version requires model update, a new `models-x.x.x.zip` will be released separately
+- 如果新版本需要更新模型，会单独更新 `models.zip`
+- If new version requires model update, `models.zip` will be updated separately
 - 下载后覆盖解压到原位置即可 / Download and extract to original location to overwrite
 
 ***
@@ -280,8 +280,8 @@ python scripts/build.py --platform all
 **Q: 启动时提示"找不到模型文件"？**
 **Q: "Model files not found" error on startup?**
 
-A: 请下载 `models-0.1.2.zip` 并解压到应用安装目录或用户数据目录的 `models/` 文件夹下。  
-A: Please download `models-0.1.2.zip` and extract to `models/` folder in app install directory or user data directory.
+A: 请下载 `models.zip` 并解压到应用安装目录或用户数据目录的 `models/` 文件夹下。  
+A: Please download `models.zip` and extract to `models/` folder in app install directory or user data directory.
 
 **Q: 支持哪些音频格式？**
 **Q: What audio formats are supported?**

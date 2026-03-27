@@ -18,7 +18,7 @@
 """
 SoundBot 启动引导模块
 =====================
-在应用启动前检查环境，确保所有依赖和模型都已就绪。
+在应用启动前检查环境，确保打包后的依赖和模型都已就绪。
 """
 
 import sys
@@ -68,7 +68,7 @@ def check_environment():
         errors.append({
             'type': 'missing_models',
             'message': f'AI 模型文件未找到: {CLAP_MODEL_PATH}',
-            'solution': '请从 GitHub Releases 下载 models.zip 并解压到以下任一位置:',
+            'solution': '请从 GitHub Releases 下载 models.zip（或 models-版本号.zip）并解压到以下任一位置:',
             'possible_locations': [
                 str(get_executable_dir() / 'models'),
                 str(get_user_data_dir() / 'models'),
